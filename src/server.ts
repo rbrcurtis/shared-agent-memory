@@ -22,13 +22,12 @@ export class SharedMemoryServer {
       tools: [
         {
           name: 'store_memory',
-          description: 'Store a memory with optional metadata. Use for insights, decisions, patterns, or any knowledge worth preserving.',
+          description: 'Store a memory scoped to the current project. Use for insights, decisions, patterns, or any knowledge worth preserving.',
           inputSchema: {
             type: 'object',
             properties: {
               text: { type: 'string', description: 'The memory content to store' },
               agent: { type: 'string', description: 'Agent identifier (e.g., claude-code, cursor)' },
-              project: { type: 'string', description: 'Project name for context' },
               tags: { type: 'array', items: { type: 'string' }, description: 'Tags for categorization' },
             },
             required: ['text'],
@@ -36,14 +35,13 @@ export class SharedMemoryServer {
         },
         {
           name: 'search_memory',
-          description: 'Search memories by semantic similarity. Returns ranked results.',
+          description: 'Search memories by semantic similarity within the current project.',
           inputSchema: {
             type: 'object',
             properties: {
               query: { type: 'string', description: 'Natural language search query' },
               limit: { type: 'number', description: 'Max results (default 10)' },
               agent: { type: 'string', description: 'Filter by agent' },
-              project: { type: 'string', description: 'Filter by project' },
               tags: { type: 'array', items: { type: 'string' }, description: 'Filter by tags' },
             },
             required: ['query'],
@@ -51,7 +49,7 @@ export class SharedMemoryServer {
         },
         {
           name: 'list_recent',
-          description: 'List recent memories chronologically.',
+          description: 'List recent memories within the current project.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -82,7 +80,6 @@ export class SharedMemoryServer {
           const id = await this.memory.store({
             text: args.text as string,
             agent: args.agent as string | undefined,
-            project: args.project as string | undefined,
             tags: args.tags as string[] | undefined,
           });
           return { content: [{ type: 'text', text: `Memory stored with ID: ${id}` }] };
@@ -93,7 +90,6 @@ export class SharedMemoryServer {
             query: args.query as string,
             limit: args.limit as number | undefined,
             agent: args.agent as string | undefined,
-            project: args.project as string | undefined,
             tags: args.tags as string[] | undefined,
           });
           return {

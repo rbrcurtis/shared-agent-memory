@@ -88,21 +88,21 @@ export class StorageService {
     });
   }
 
-  async listRecent(limit: number, daysBack: number = 30): Promise<SearchResult[]> {
+  async listRecent(limit: number, daysBack: number = 30, project?: string): Promise<SearchResult[]> {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - daysBack);
+
+    const must: object[] = [
+      { key: 'created_at', range: { gte: cutoff.toISOString() } },
+    ];
+    if (project) {
+      must.push({ key: 'project', match: { value: project } });
+    }
 
     const results = await this.client.scroll(this.config.collectionName, {
       limit,
       with_payload: true,
-      filter: {
-        must: [
-          {
-            key: 'created_at',
-            range: { gte: cutoff.toISOString() },
-          },
-        ],
-      },
+      filter: { must },
     });
 
     return results.points
