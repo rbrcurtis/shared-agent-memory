@@ -2,25 +2,28 @@
 
 MCP server enabling multiple AI agents to share persistent memory via Qdrant.
 
-## Installation
-
-```bash
-git clone https://github.com/rbrcurtis/shared-agent-memory.git
-cd shared-agent-memory
-npm install
-npm run build
-```
-
 ## Claude Code Setup
 
+Paste this into Claude Code:
+
+```
+Read https://raw.githubusercontent.com/rbrcurtis/shared-agent-memory/main/CLAUDE_INSTRUCTIONS.md and follow the setup instructions.
+```
+
+### Manual Installation
+
 ```bash
+git clone https://github.com/rbrcurtis/shared-agent-memory.git ~/shared-agent-memory
+cd ~/shared-agent-memory
+npm install
+npm run build
+
 claude mcp add-json shared-memory '{
   "type": "stdio",
   "command": "node",
-  "args": ["/path/to/shared-agent-memory/dist/index.js"],
+  "args": ["'$HOME'/shared-agent-memory/dist/index.js"],
   "env": {
-    "QDRANT_URL": "http://your-qdrant-server:6333",
-    "QDRANT_API_KEY": "your-key",
+    "QDRANT_URL": "http://localhost:6333",
     "DEFAULT_AGENT": "claude-code"
   }
 }' -s user
