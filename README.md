@@ -2,15 +2,38 @@
 
 MCP server enabling multiple AI agents to share persistent memory via Qdrant.
 
-## Quick Start
+## Installation
 
 ```bash
-# Install
-npm install -g shared-agent-memory
-
-# Or run directly
-npx shared-agent-memory --qdrant-url https://your-qdrant.example.com --api-key YOUR_KEY
+git clone https://github.com/rbrcurtis/shared-agent-memory.git
+cd shared-agent-memory
+npm install
+npm run build
 ```
+
+## Claude Code Setup
+
+```bash
+claude mcp add-json shared-memory '{
+  "type": "stdio",
+  "command": "node",
+  "args": ["/path/to/shared-agent-memory/dist/index.js"],
+  "env": {
+    "QDRANT_URL": "http://your-qdrant-server:6333",
+    "QDRANT_API_KEY": "your-key",
+    "DEFAULT_AGENT": "claude-code"
+  }
+}' -s user
+```
+
+## Project Scoping
+
+Memories are automatically scoped to the current project:
+
+1. If in a git repo, project name is extracted from the remote origin URL
+2. Otherwise, the current directory name is used
+
+This prevents cross-project memory pollution.
 
 ## Configuration
 
@@ -22,42 +45,25 @@ npx shared-agent-memory --qdrant-url https://your-qdrant.example.com --api-key Y
 | `QDRANT_API_KEY` | API key for Qdrant | none |
 | `COLLECTION_NAME` | Qdrant collection name | `shared_agent_memory` |
 | `DEFAULT_AGENT` | Default agent identifier | `unknown` |
-| `DEFAULT_PROJECT` | Default project name | `default` |
+| `DEFAULT_PROJECT` | Override auto-detected project | git repo name or folder |
 
 ### CLI Arguments
 
 ```bash
-shared-agent-memory \
-  --qdrant-url https://your-qdrant.example.com \
+node dist/index.js \
+  --qdrant-url http://your-qdrant:6333 \
   --api-key YOUR_KEY \
   --collection my_memories \
-  --agent claude-code \
-  --project my-project
-```
-
-### Claude Code Setup
-
-```bash
-claude mcp add-json shared-memory '{
-  "type": "stdio",
-  "command": "npx",
-  "args": ["shared-agent-memory"],
-  "env": {
-    "QDRANT_URL": "https://your-qdrant.example.com",
-    "QDRANT_API_KEY": "your-key",
-    "DEFAULT_AGENT": "claude-code",
-    "DEFAULT_PROJECT": "my-project"
-  }
-}' -s user
+  --agent claude-code
 ```
 
 ## Tools
 
 | Tool | Description |
 |------|-------------|
-| `store_memory` | Save text with metadata, generates embedding automatically |
-| `search_memory` | Semantic search across all memories |
-| `list_recent` | List recent memories by timestamp |
+| `store_memory` | Store text in current project, generates embedding automatically |
+| `search_memory` | Semantic search within current project |
+| `list_recent` | List recent memories in current project |
 | `delete_memory` | Remove a memory by ID |
 
 ## Architecture
@@ -68,36 +74,7 @@ Agent 1 (Claude Code) ──┐
 Agent 2 (Cursor)     ──┘
 ```
 
-Embeddings generated locally using `all-MiniLM-L6-v2` (384 dimensions).
-Zero external API costs for embeddings.
-
-## Kubernetes Deployment
-
-Manifests in `k8s/` directory for deploying Qdrant to minikube or any Kubernetes cluster:
-
-```bash
-kubectl apply -f k8s/
-```
-
-Default ingress host: `qdrant.trackable.io`
-
-### Authentication
-
-Qdrant is deployed with API key authentication enabled. The key is stored in a Kubernetes Secret:
-
-```bash
-# View current API key
-kubectl get secret qdrant-api-key -n qdrant -o jsonpath='{.data.api-key}' | base64 -d
-
-# Generate new key and update secret
-NEW_KEY=$(openssl rand -base64 32)
-kubectl create secret generic qdrant-api-key -n qdrant \
-  --from-literal=api-key="$NEW_KEY" \
-  --dry-run=client -o yaml | kubectl apply -f -
-kubectl rollout restart deployment/qdrant -n qdrant
-```
-
-Pass the API key to the MCP via `QDRANT_API_KEY` env var or `--api-key` argument.
+Embeddings generated locally using `all-MiniLM-L6-v2` (384 dimensions). Zero external API costs for embeddings.
 
 ## License
 
