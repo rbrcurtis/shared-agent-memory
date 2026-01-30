@@ -40,6 +40,33 @@ Memories are automatically scoped to the current project to prevent cross-projec
 
 This means memories stored while working on `my-app` are only visible when working in that repo, regardless of the local folder name.
 
+## Agent Instructions
+
+Add this to your `CLAUDE.md` or project instructions to ensure consistent memory usage:
+
+```markdown
+## Memory Usage
+
+Use the shared-memory MCP to maintain knowledge across sessions.
+
+### When to Store Memories
+- Architecture decisions and rationale
+- Discovered patterns in the codebase
+- User preferences and workflow
+- Solutions to tricky problems
+- API contracts and integration details
+
+### When to Search Memories
+- Before starting any significant task
+- When context seems missing from conversation
+- When encountering code you've worked on before
+
+### Best Practices
+- Store memories with descriptive text that will match semantic search
+- Search before asking the user questions that may have been answered before
+- Keep memories atomic - one concept per memory
+```
+
 ## Configuration
 
 ### Environment Variables
