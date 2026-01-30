@@ -81,6 +81,24 @@ kubectl apply -f k8s/
 
 Default ingress host: `qdrant.trackable.io`
 
+### Authentication
+
+Qdrant is deployed with API key authentication enabled. The key is stored in a Kubernetes Secret:
+
+```bash
+# View current API key
+kubectl get secret qdrant-api-key -n qdrant -o jsonpath='{.data.api-key}' | base64 -d
+
+# Generate new key and update secret
+NEW_KEY=$(openssl rand -base64 32)
+kubectl create secret generic qdrant-api-key -n qdrant \
+  --from-literal=api-key="$NEW_KEY" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl rollout restart deployment/qdrant -n qdrant
+```
+
+Pass the API key to the MCP via `QDRANT_API_KEY` env var or `--api-key` argument.
+
 ## License
 
 MIT
