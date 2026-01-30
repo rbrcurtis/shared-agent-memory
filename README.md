@@ -45,25 +45,30 @@ This means memories stored while working on `my-app` are only visible when worki
 Add this to your `CLAUDE.md` or project instructions to ensure consistent memory usage:
 
 ```markdown
-## Memory Usage
+## Shared Memory
 
-Use the shared-memory MCP to maintain knowledge across sessions.
+Use the shared-memory MCP to maintain project knowledge across sessions.
 
-### When to Store Memories
-- Architecture decisions and rationale
-- Discovered patterns in the codebase
-- User preferences and workflow
-- Solutions to tricky problems
-- API contracts and integration details
+### Session Start
+At the start of each session, `search_memory` for "context" or "getting started" to retrieve relevant project knowledge.
 
-### When to Search Memories
-- Before starting any significant task
-- When context seems missing from conversation
-- When encountering code you've worked on before
+### When to Search
+- Before planning any significant task
+- When encountering unfamiliar code or errors
+- When unsure about project conventions
+
+### When to Store
+Store knowledge that would help future sessions:
+
+- **Workflows**: Build/deploy steps, environment quirks, service startup order
+- **Troubleshooting**: Error messages and root causes, diagnostic commands
+- **Codebase**: Where logic lives, why patterns exist, integration points
+- **User preferences**: Naming conventions, preferred approaches, things to avoid
+- **Infrastructure**: DNS/networking, credential locations, deployment targets
 
 ### Best Practices
 - Store memories with descriptive text that will match semantic search
-- Search before asking the user questions that may have been answered before
+- Search before asking questions that may have been answered before
 - Keep memories atomic - one concept per memory
 ```
 
