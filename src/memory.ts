@@ -19,10 +19,8 @@ export class MemoryService {
   }
 
   async initialize(): Promise<void> {
-    await Promise.all([
-      this.embeddings.initialize(),
-      this.storage.initialize(),
-    ]);
+    await this.storage.initialize();
+    // Embeddings load lazily on first store/search
   }
 
   async store(request: StoreMemoryRequest): Promise<string> {
