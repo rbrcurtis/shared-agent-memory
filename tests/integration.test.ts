@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { MemoryService } from '../src/memory.js';
+import { StorageService } from '../src/storage.js';
 import { ServerConfig } from '../src/types.js';
 
 describe.skipIf(!process.env.QDRANT_URL)('Integration', () => {
   let memory: MemoryService;
+  let storage: StorageService;
   const config: ServerConfig = {
     qdrantUrl: process.env.QDRANT_URL || 'http://localhost:6333',
     qdrantApiKey: process.env.QDRANT_API_KEY,
@@ -14,11 +16,12 @@ describe.skipIf(!process.env.QDRANT_URL)('Integration', () => {
 
   beforeAll(async () => {
     memory = new MemoryService(config);
+    storage = new StorageService(config);
     await memory.initialize();
   }, 120000);
 
   afterAll(async () => {
-    // Cleanup handled by test collection naming
+    await storage.deleteCollection();
   });
 
   it('stores and retrieves a memory end-to-end', async () => {
