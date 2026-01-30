@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import arg from 'arg';
+import { execSync } from 'child_process';
 import { SharedMemoryServer } from './server.js';
 import { ServerConfig } from './types.js';
 
@@ -22,10 +23,31 @@ Options:
   --api-key <key>       Qdrant API key (default: QDRANT_API_KEY)
   --collection <name>   Collection name (default: COLLECTION_NAME or shared_agent_memory)
   --agent <name>        Default agent identifier (default: DEFAULT_AGENT or unknown)
-  --project <name>      Default project name (default: DEFAULT_PROJECT or default)
+  --project <name>      Default project name (default: git repo name or folder name)
   -h, --help            Show this help message
 `);
   process.exit(0);
+}
+
+function getProjectFromGitRemote(): string | null {
+  try {
+    const remote = execSync('git remote get-url origin', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    // Handle SSH format: git@github.com:user/repo.git
+    // Handle HTTPS format: https://github.com/user/repo.git
+    const match = remote.match(/[/:]([^/]+?)(?:\.git)?$/);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+function getDefaultProject(): string {
+  if (args['--project']) return args['--project'];
+  if (process.env.DEFAULT_PROJECT) return process.env.DEFAULT_PROJECT;
+  const gitProject = getProjectFromGitRemote();
+  if (gitProject) return gitProject;
+  const pwd = process.env.PWD || process.cwd();
+  return pwd.split('/').pop() || 'default';
 }
 
 const config: ServerConfig = {
@@ -33,7 +55,7 @@ const config: ServerConfig = {
   qdrantApiKey: args['--api-key'] || process.env.QDRANT_API_KEY,
   collectionName: args['--collection'] || process.env.COLLECTION_NAME || 'shared_agent_memory',
   defaultAgent: args['--agent'] || process.env.DEFAULT_AGENT || 'unknown',
-  defaultProject: args['--project'] || process.env.DEFAULT_PROJECT || 'default',
+  defaultProject: getDefaultProject(),
 };
 
 async function main(): Promise<void> {

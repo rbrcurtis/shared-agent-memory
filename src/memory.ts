@@ -44,13 +44,13 @@ export class MemoryService {
       vector,
       limit: request.limit || 10,
       agent: request.agent,
-      project: request.project,
+      project: request.project || this.config.defaultProject,
       tags: request.tags,
     });
   }
 
   async listRecent(limit: number = 10, daysBack: number = 30): Promise<SearchResult[]> {
-    return this.storage.listRecent(limit, daysBack);
+    return this.storage.listRecent(limit, daysBack, this.config.defaultProject);
   }
 
   async delete(id: string): Promise<boolean> {
