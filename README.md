@@ -31,12 +31,14 @@ claude mcp add-json shared-memory '{
 
 ## Project Scoping
 
-Memories are automatically scoped to the current project:
+Memories are automatically scoped to the current project to prevent cross-project pollution. The project name is determined by:
 
-1. If in a git repo, project name is extracted from the remote origin URL
-2. Otherwise, the current directory name is used
+1. **Git remote** (preferred): Extracted from `git remote get-url origin`
+   - `https://github.com/user/my-app.git` → `my-app`
+   - `git@bitbucket.org:team/backend.git` → `backend`
+2. **Folder name** (fallback): Used when not in a git repo
 
-This prevents cross-project memory pollution.
+This means memories stored while working on `my-app` are only visible when working in that repo, regardless of the local folder name.
 
 ## Configuration
 
