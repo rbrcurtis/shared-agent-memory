@@ -111,6 +111,18 @@ async function main(): Promise<void> {
         },
       },
       {
+        name: 'update_memory',
+        description: 'Update an existing memory with new text. Use this to keep memories current when information changes.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', description: 'Memory ID to update' },
+            text: { type: 'string', description: 'New memory content' },
+          },
+          required: ['id', 'text'],
+        },
+      },
+      {
         name: 'delete_memory',
         description: 'Delete a memory by ID.',
         inputSchema: {
@@ -182,6 +194,13 @@ async function main(): Promise<void> {
                 ).join('\n\n'),
           }],
         };
+      }
+
+      case 'update_memory': {
+        const id = toolArgs.id as string;
+        const text = toolArgs.text as string;
+        await client.updateMemory({ id, text, project: defaultProject });
+        return { content: [{ type: 'text', text: `Memory ${id} updated.` }] };
       }
 
       case 'delete_memory': {

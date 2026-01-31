@@ -122,6 +122,14 @@ export async function listRecent(params: {
   return call('list_recent', params) as Promise<{ results: unknown[] }>;
 }
 
+export async function updateMemory(params: {
+  id: string;
+  text: string;
+  project?: string;
+}): Promise<{ success: boolean }> {
+  return call('update_memory', params) as Promise<{ success: boolean }>;
+}
+
 export async function deleteMemory(id: string): Promise<{ success: boolean }> {
   return call('delete_memory', { id }) as Promise<{ success: boolean }>;
 }
