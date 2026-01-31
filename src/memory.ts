@@ -51,6 +51,17 @@ export class MemoryService {
     return this.storage.listRecent(limit, daysBack, project || this.config.defaultProject);
   }
 
+  async update(id: string, text: string, project?: string): Promise<void> {
+    const vector = await this.embeddings.generateEmbedding(text);
+    await this.storage.update(id, {
+      text,
+      vector,
+      agent: this.config.defaultAgent,
+      project: project || this.config.defaultProject,
+      tags: [],
+    });
+  }
+
   async delete(id: string): Promise<boolean> {
     return this.storage.delete(id);
   }

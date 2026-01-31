@@ -98,6 +98,14 @@ async function handleRequest(method: string, params: Record<string, unknown>): P
       return { results };
     }
 
+    case 'update_memory': {
+      const id = params.id as string;
+      const text = params.text as string;
+      const project = params.project as string | undefined;
+      await memory.update(id, text, project);
+      return { success: true };
+    }
+
     case 'delete_memory': {
       await memory.delete(params.id as string);
       return { success: true };

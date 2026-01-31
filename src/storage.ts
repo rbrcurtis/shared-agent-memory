@@ -121,6 +121,22 @@ export class StorageService {
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
+  async update(id: string, params: StoreParams): Promise<void> {
+    const payload: Record<string, unknown> = {
+      id,
+      text: params.text,
+      agent: params.agent,
+      project: params.project,
+      tags: params.tags,
+      created_at: new Date().toISOString(),
+    };
+
+    await this.client.upsert(this.config.collectionName, {
+      wait: true,
+      points: [{ id, vector: params.vector, payload }],
+    });
+  }
+
   async delete(id: string): Promise<boolean> {
     await this.client.delete(this.config.collectionName, {
       wait: true,
