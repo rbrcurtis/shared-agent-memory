@@ -45,12 +45,13 @@ This means memories stored while working on `my-app` are only visible when worki
 Add this to your `CLAUDE.md` or project instructions to ensure consistent memory usage:
 
 ```markdown
+## Session Start (MANDATORY)
+
+**Before doing ANYTHING else**, run `search_memory` for "context" or "getting started" to retrieve project knowledge from previous sessions. This applies to every new conversation, no exceptions.
+
 ## Shared Memory
 
 Use the shared-memory MCP to maintain project knowledge across sessions.
-
-### Session Start
-At the start of each session, `search_memory` for "context" or "getting started" to retrieve relevant project knowledge.
 
 ### When to Search
 - Before planning any significant task
@@ -72,6 +73,27 @@ Store knowledge that would help future sessions:
 - Keep memories atomic - one concept per memory
 ```
 
+### Enforcing with Claude Code Hooks
+
+Add a SessionStart hook to `~/.claude/settings.json` to remind Claude to search memory:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'MANDATORY: Run search_memory for \"context\" or \"getting started\" BEFORE doing anything else. No exceptions.'"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
 ## Configuration
 
 ### Environment Variables
@@ -83,6 +105,7 @@ Store knowledge that would help future sessions:
 | `COLLECTION_NAME` | Qdrant collection name | `shared_agent_memory` |
 | `DEFAULT_AGENT` | Default agent identifier | `unknown` |
 | `DEFAULT_PROJECT` | Override auto-detected project | git repo name or folder |
+| `DAEMON_IDLE_TIMEOUT` | Daemon shutdown after N seconds idle | `7200` (2 hours) |
 
 ### CLI Arguments
 
@@ -102,16 +125,33 @@ node dist/index.js \
 | `search_memory` | Semantic search within current project |
 | `list_recent` | List recent memories in current project |
 | `delete_memory` | Remove a memory by ID |
+| `get_config` | Show current configuration and daemon status |
 
 ## Architecture
 
 ```
 Agent 1 (Claude Code) ──┐
-                        ├── MCP (local, stdio) ── Qdrant (remote)
-Agent 2 (Cursor)     ──┘
+                        ├── MCP Wrapper ── Unix Socket ── Daemon ── Qdrant
+Agent 2 (Cursor)     ──┘                   /tmp/shared-memory.sock
 ```
 
-Embeddings generated locally using `all-MiniLM-L6-v2` (384 dimensions). Zero external API costs for embeddings.
+The daemon architecture keeps the embedding model loaded in memory for fast responses:
+
+- **MCP Wrapper** (`index.ts`): Thin stdio server that forwards tool calls
+- **Daemon** (`daemon.ts`): Long-running process holding the model, listens on Unix socket
+- **Client** (`client.ts`): Auto-starts daemon on first request, handles reconnection
+
+### Daemon Behavior
+
+| Feature | Behavior |
+|---------|----------|
+| Socket path | `/tmp/shared-memory.sock` (Linux/Mac), `\\.\pipe\shared-memory` (Windows) |
+| Auto-start | Client spawns daemon on first connection if not running |
+| Idle timeout | Shuts down after 2 hours of inactivity (configurable) |
+| Model loading | Pre-warms on startup, ~100ms for subsequent requests |
+| Logs | `/tmp/shared-memory-daemon.log` |
+
+Embeddings generated locally using `all-MiniLM-L6-v2` (384 dimensions). Zero external API costs.
 
 ## License
 
