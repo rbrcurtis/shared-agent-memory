@@ -42,7 +42,19 @@ This means memories stored while working on `my-app` are only visible when worki
 
 ## Agent Instructions
 
-Add a SessionStart hook to `~/.claude/settings.json` to guide memory usage:
+For consistent memory usage, add instructions to **both** `~/.claude/CLAUDE.md` and a SessionStart hook.
+
+### 1. Add to ~/.claude/CLAUDE.md
+
+```markdown
+## Shared Memory
+- **ALWAYS search_memory BEFORE searching files** when tasks need project context
+- **ALWAYS store_memory** when you learn: workflows, troubleshooting, codebase patterns, user preferences, infrastructure
+- **ALWAYS update_memory** when information changes - no stale duplicates
+- One concept per memory, descriptive text for semantic search
+```
+
+### 2. Add SessionStart hook to ~/.claude/settings.json
 
 ```json
 {
@@ -52,7 +64,7 @@ Add a SessionStart hook to `~/.claude/settings.json` to guide memory usage:
         "hooks": [
           {
             "type": "command",
-            "command": "echo '## Shared Memory\\nWhen a task requires project context, search shared memory before searching files.\\n\\n### When to Search\\n- Before planning significant tasks\\n- When encountering unfamiliar code or errors\\n- When unsure about project conventions\\n\\n### When to Store\\n- Workflows, build/deploy steps, environment quirks\\n- Troubleshooting: error messages and root causes\\n- Codebase: where logic lives, why patterns exist\\n- User preferences and things to avoid\\n- Infrastructure: DNS, credentials, deployment targets\\n\\n### Keeping Memories Current\\nUse update_memory to update stale memories instead of creating duplicates.\\n\\n### Best Practices\\n- Descriptive text that matches semantic search\\n- Search before asking previously-answered questions\\n- One concept per memory'"
+            "command": "echo '## SHARED MEMORY - REQUIRED\\n\\n**ALWAYS search_memory BEFORE searching files** when tasks need project context.\\n\\n**ALWAYS store_memory** when you learn: workflows, troubleshooting steps, codebase patterns, user preferences, infrastructure details.\\n\\n**ALWAYS update_memory** when information changes - never create duplicates of stale data.\\n\\nOne concept per memory. Descriptive text for semantic search.'"
           }
         ]
       }
