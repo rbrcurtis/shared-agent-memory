@@ -42,40 +42,7 @@ This means memories stored while working on `my-app` are only visible when worki
 
 ## Agent Instructions
 
-Add this to your `CLAUDE.md` or project instructions to ensure consistent memory usage:
-
-```markdown
-## Session Start (MANDATORY)
-
-**Before doing ANYTHING else**, run `search_memory` for "context" or "getting started" to retrieve project knowledge from previous sessions. This applies to every new conversation, no exceptions.
-
-## Shared Memory
-
-Use the shared-memory MCP to maintain project knowledge across sessions.
-
-### When to Search
-- Before planning any significant task
-- When encountering unfamiliar code or errors
-- When unsure about project conventions
-
-### When to Store
-Store knowledge that would help future sessions:
-
-- **Workflows**: Build/deploy steps, environment quirks, service startup order
-- **Troubleshooting**: Error messages and root causes, diagnostic commands
-- **Codebase**: Where logic lives, why patterns exist, integration points
-- **User preferences**: Naming conventions, preferred approaches, things to avoid
-- **Infrastructure**: DNS/networking, credential locations, deployment targets
-
-### Best Practices
-- Store memories with descriptive text that will match semantic search
-- Search before asking questions that may have been answered before
-- Keep memories atomic - one concept per memory
-```
-
-### Enforcing with Claude Code Hooks
-
-Add a SessionStart hook to `~/.claude/settings.json` to remind Claude to search memory:
+Add a SessionStart hook to `~/.claude/settings.json` to guide memory usage:
 
 ```json
 {
@@ -85,7 +52,7 @@ Add a SessionStart hook to `~/.claude/settings.json` to remind Claude to search 
         "hooks": [
           {
             "type": "command",
-            "command": "echo 'MANDATORY: Run search_memory for \"context\" or \"getting started\" BEFORE doing anything else. No exceptions.'"
+            "command": "echo '## Shared Memory\\nWhen a task requires project context, search shared memory before searching files.\\n\\n### When to Search\\n- Before planning significant tasks\\n- When encountering unfamiliar code or errors\\n- When unsure about project conventions\\n\\n### When to Store\\n- Workflows, build/deploy steps, environment quirks\\n- Troubleshooting: error messages and root causes\\n- Codebase: where logic lives, why patterns exist\\n- User preferences and things to avoid\\n- Infrastructure: DNS, credentials, deployment targets\\n\\n### Keeping Memories Current\\nUse update_memory to update stale memories instead of creating duplicates.\\n\\n### Best Practices\\n- Descriptive text that matches semantic search\\n- Search before asking previously-answered questions\\n- One concept per memory'"
           }
         ]
       }
@@ -124,6 +91,7 @@ node dist/index.js \
 | `store_memory` | Store text in current project, generates embedding automatically |
 | `search_memory` | Semantic search within current project |
 | `list_recent` | List recent memories in current project |
+| `update_memory` | Update existing memory with new text |
 | `delete_memory` | Remove a memory by ID |
 | `get_config` | Show current configuration and daemon status |
 
