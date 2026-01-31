@@ -47,8 +47,8 @@ export class MemoryService {
     });
   }
 
-  async listRecent(limit: number = 10, daysBack: number = 30): Promise<SearchResult[]> {
-    return this.storage.listRecent(limit, daysBack, this.config.defaultProject);
+  async listRecent(limit: number = 10, daysBack: number = 30, project?: string): Promise<SearchResult[]> {
+    return this.storage.listRecent(limit, daysBack, project || this.config.defaultProject);
   }
 
   async delete(id: string): Promise<boolean> {

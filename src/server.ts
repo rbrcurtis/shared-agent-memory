@@ -10,8 +10,10 @@ import { ServerConfig } from './types.js';
 export class SharedMemoryServer {
   private server: Server;
   private memory: MemoryService;
+  private config: ServerConfig;
 
   constructor(config: ServerConfig) {
+    this.config = config;
     this.memory = new MemoryService(config);
     this.server = new Server({ name: 'shared-agent-memory', version: '0.1.0' });
     this.setupHandlers();
@@ -69,6 +71,14 @@ export class SharedMemoryServer {
             required: ['id'],
           },
         },
+        {
+          name: 'get_config',
+          description: 'Get the current MCP server configuration including detected project name.',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+          },
+        },
       ],
     }));
 
@@ -124,6 +134,15 @@ export class SharedMemoryServer {
           const id = args.id as string;
           await this.memory.delete(id);
           return { content: [{ type: 'text', text: `Memory ${id} deleted.` }] };
+        }
+
+        case 'get_config': {
+          return {
+            content: [{
+              type: 'text',
+              text: `Qdrant URL: ${this.config.qdrantUrl}\nCollection: ${this.config.collectionName}\nDefault Agent: ${this.config.defaultAgent}\nDefault Project: ${this.config.defaultProject}`,
+            }],
+          };
         }
 
         default:
