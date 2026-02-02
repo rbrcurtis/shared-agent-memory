@@ -11,6 +11,15 @@ const SOCKET_PATH = process.platform === 'win32'
   ? '\\\\.\\pipe\\shared-memory'
   : '/tmp/shared-memory.sock';
 
+// Qdrant config from environment (passed with each request)
+function getQdrantConfig(): Record<string, string | undefined> {
+  return {
+    qdrantUrl: process.env.QDRANT_URL,
+    qdrantApiKey: process.env.QDRANT_API_KEY,
+    collectionName: process.env.COLLECTION_NAME,
+  };
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -80,7 +89,9 @@ function readLine(socket: net.Socket): Promise<string> {
 export async function call(method: string, params: Record<string, unknown> = {}): Promise<unknown> {
   const socket = await ensureDaemon();
   const id = randomUUID();
-  const request = JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n';
+  // Include Qdrant config with every request so daemon can route to correct server
+  const paramsWithConfig = { ...getQdrantConfig(), ...params };
+  const request = JSON.stringify({ jsonrpc: '2.0', id, method, params: paramsWithConfig }) + '\n';
 
   socket.write(request);
 
