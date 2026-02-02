@@ -25,8 +25,14 @@ export class StorageService {
 
   constructor(config: ServerConfig) {
     this.config = config;
+    const url = new URL(config.qdrantUrl);
+    const isHttps = url.protocol === 'https:';
+    const port = url.port ? parseInt(url.port) : (isHttps ? 443 : 6333);
+
     this.client = new QdrantClient({
-      url: config.qdrantUrl,
+      host: url.hostname,
+      port,
+      https: isHttps,
       apiKey: config.qdrantApiKey,
     });
   }
