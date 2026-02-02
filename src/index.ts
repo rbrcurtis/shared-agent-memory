@@ -67,6 +67,8 @@ async function main(): Promise<void> {
   console.error('Starting Shared Agent Memory MCP Server (wrapper)...');
   console.error(`Default Project: ${defaultProject}`);
   console.error(`Default Agent: ${defaultAgent}`);
+  console.error(`QDRANT_URL: ${process.env.QDRANT_URL || '(not set)'}`);
+  console.error(`QDRANT_API_KEY: ${process.env.QDRANT_API_KEY ? '(set)' : '(not set)'}`);
 
   const server = new Server({ name: 'shared-agent-memory', version: '0.2.0' });
 
@@ -146,7 +148,9 @@ async function main(): Promise<void> {
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: toolArgs = {} } = request.params;
+    console.error(`[MCP] Tool call: ${name}`);
 
+    try {
     switch (name) {
       case 'store_memory': {
         const result = await client.storeMemory({
@@ -221,6 +225,10 @@ async function main(): Promise<void> {
 
       default:
         throw new Error(`Unknown tool: ${name}`);
+    }
+    } catch (err) {
+      console.error(`[MCP] Error in ${name}:`, err);
+      throw err;
     }
   });
 
