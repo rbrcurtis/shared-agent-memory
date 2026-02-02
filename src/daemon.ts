@@ -99,7 +99,9 @@ async function checkExistingDaemon(): Promise<boolean> {
 // Handle a single JSON-RPC request
 async function handleRequest(method: string, params: Record<string, unknown>): Promise<unknown> {
   lastActivity = Date.now();
+  log(`Request: ${method} qdrantUrl=${params.qdrantUrl} apiKey=${params.qdrantApiKey ? '(set)' : '(not set)'}`);
 
+  try {
   switch (method) {
     case 'store_memory': {
       const storage = await getStorage(params);
@@ -172,6 +174,10 @@ async function handleRequest(method: string, params: Record<string, unknown>): P
 
     default:
       throw new Error(`Unknown method: ${method}`);
+  }
+  } catch (err) {
+    log(`Error in ${method}: ${err}`);
+    throw err;
   }
 }
 
