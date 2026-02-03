@@ -13,21 +13,46 @@ Read https://raw.githubusercontent.com/rbrcurtis/shared-agent-memory/main/CLAUDE
 ### Manual Installation
 
 ```bash
-git clone https://github.com/rbrcurtis/shared-agent-memory.git ~/shared-agent-memory
-cd ~/shared-agent-memory
+# Clone to your preferred location
+git clone https://github.com/rbrcurtis/shared-agent-memory.git <PATH>
+cd <PATH>
 npm install
 npm run build
 
+# Project-level (recommended) - add to current project's .mcp.json
 claude mcp add-json shared-memory '{
   "type": "stdio",
   "command": "node",
-  "args": ["'$HOME'/shared-agent-memory/dist/index.js"],
+  "args": ["<PATH>/dist/index.js"],
   "env": {
     "QDRANT_URL": "http://localhost:6333",
     "DEFAULT_AGENT": "claude-code"
   }
-}' -s user
+}'
 ```
+
+### Installation Scope
+
+| Scope | Flag | Config File | Use Case |
+|-------|------|-------------|----------|
+| Project | (default) | `.mcp.json` | Different Qdrant per project |
+| User | `-s user` | `~/.claude.json` | Shared Qdrant for all projects |
+
+**Multi-Qdrant Setup**: The daemon supports multiple Qdrant servers simultaneously. Configure different servers per project:
+
+```bash
+# Work projects - uses company Qdrant
+cd ~/work/api && claude mcp add-json shared-memory '{
+  "env": { "QDRANT_URL": "https://qdrant.company.com", "QDRANT_API_KEY": "..." }
+}'
+
+# Personal projects - uses local Qdrant
+cd ~/projects/app && claude mcp add-json shared-memory '{
+  "env": { "QDRANT_URL": "http://localhost:6333" }
+}'
+```
+
+Project `.mcp.json` overrides user `~/.claude.json` when both exist.
 
 ## Project Scoping
 
