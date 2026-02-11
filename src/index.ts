@@ -173,7 +173,7 @@ async function main(): Promise<void> {
             text: results.length === 0
               ? 'No memories found.'
               : results.map((r, i) =>
-                  `[${i + 1}] (score: ${r.score.toFixed(3)}) [${r.agent}/${r.project}]\nID: ${r.id}\n${r.text}\nTags: ${r.tags.join(', ') || 'none'} | Created: ${r.created_at}`
+                  `[${i + 1}] (score: ${r.score.toFixed(3)}) [${r.agent}/${r.project}]\nID: ${r.id}\n${r.text}\nTags: ${r.tags?.join(', ') || 'none'} | Created: ${r.created_at}`
                 ).join('\n\n'),
           }],
         };
