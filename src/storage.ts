@@ -108,7 +108,7 @@ export class StorageService {
 
     const must: object[] = [
       { key: 'created_at', range: { gte: cutoff.toISOString() } },
-      { is_null: { key: 'tombstoned_at' } },
+      { is_empty: { key: 'tombstoned_at' } },
     ];
     if (project) {
       must.push({ key: 'project', match: { value: project } });
@@ -199,7 +199,7 @@ export class StorageService {
 
   private buildFilter(params: SearchParams): { must: object[] } {
     const must: object[] = [
-      { is_null: { key: 'tombstoned_at' } },
+      { is_empty: { key: 'tombstoned_at' } },
     ];
 
     if (params.agent) {
