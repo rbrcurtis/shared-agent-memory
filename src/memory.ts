@@ -40,6 +40,7 @@ export class MemoryService {
 
     return this.storage.search({
       vector,
+      queryText: request.query,
       limit: request.limit || 10,
       agent: request.agent,
       project: request.project || this.config.defaultProject,
