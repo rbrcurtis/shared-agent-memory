@@ -1,5 +1,6 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
 import { ServerConfig, MemoryMetadata, SearchResult } from './types.js';
+import { computeStability } from './retention.js';
 import { randomUUID } from 'crypto';
 
 interface StoreParams {
@@ -53,13 +54,17 @@ export class StorageService {
 
   async store(params: StoreParams): Promise<string> {
     const id = randomUUID();
+    const now = new Date().toISOString();
     const payload: Record<string, unknown> = {
       id,
       text: params.text,
       agent: params.agent,
       project: params.project,
       tags: params.tags,
-      created_at: new Date().toISOString(),
+      created_at: now,
+      last_accessed: now,
+      access_count: 0,
+      stability: 1.0,
     };
 
     await this.client.upsert(this.config.collectionName, {
@@ -76,7 +81,7 @@ export class StorageService {
     const results = await this.client.query(this.config.collectionName, {
       query: params.vector,
       limit: params.limit,
-      filter: filter.must.length > 0 ? filter : undefined,
+      filter,
       with_payload: true,
     });
 
@@ -90,6 +95,9 @@ export class StorageService {
         project: payload.project,
         tags: payload.tags,
         created_at: payload.created_at,
+        last_accessed: payload.last_accessed,
+        access_count: payload.access_count,
+        stability: payload.stability,
       };
     });
   }
@@ -100,6 +108,7 @@ export class StorageService {
 
     const must: object[] = [
       { key: 'created_at', range: { gte: cutoff.toISOString() } },
+      { is_null: { key: 'tombstoned_at' } },
     ];
     if (project) {
       must.push({ key: 'project', match: { value: project } });
@@ -122,19 +131,26 @@ export class StorageService {
           project: payload.project,
           tags: payload.tags,
           created_at: payload.created_at,
+          last_accessed: payload.last_accessed,
+          access_count: payload.access_count,
+          stability: payload.stability,
         };
       })
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
   async update(id: string, params: StoreParams): Promise<void> {
+    const now = new Date().toISOString();
     const payload: Record<string, unknown> = {
       id,
       text: params.text,
       agent: params.agent,
       project: params.project,
       tags: params.tags,
-      created_at: new Date().toISOString(),
+      created_at: now,
+      last_accessed: now,
+      access_count: 0,
+      stability: 1.0,
     };
 
     await this.client.upsert(this.config.collectionName, {
@@ -155,8 +171,36 @@ export class StorageService {
     await this.client.deleteCollection(this.config.collectionName);
   }
 
+  async reinforceMemories(points: Array<{ id: string; accessCount: number }>): Promise<void> {
+    const now = new Date().toISOString();
+    for (const point of points) {
+      const newCount = point.accessCount + 1;
+      await this.client.setPayload(this.config.collectionName, {
+        payload: {
+          last_accessed: now,
+          access_count: newCount,
+          stability: computeStability(newCount),
+        },
+        points: [point.id],
+      });
+    }
+  }
+
+  async tombstoneMemories(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    const now = new Date().toISOString();
+    for (const id of ids) {
+      await this.client.setPayload(this.config.collectionName, {
+        payload: { tombstoned_at: now },
+        points: [id],
+      });
+    }
+  }
+
   private buildFilter(params: SearchParams): { must: object[] } {
-    const must: object[] = [];
+    const must: object[] = [
+      { is_null: { key: 'tombstoned_at' } },
+    ];
 
     if (params.agent) {
       must.push({ key: 'agent', match: { value: params.agent } });
