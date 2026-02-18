@@ -20,6 +20,12 @@ interface SearchParams {
   tags?: string[];
 }
 
+function normalizeTags(tags: unknown): string[] {
+  if (Array.isArray(tags)) return tags;
+  if (typeof tags === 'string') return tags.split(',').map(t => t.trim()).filter(Boolean);
+  return [];
+}
+
 export class StorageService {
   private client: QdrantClient;
   private config: ServerConfig;
@@ -111,21 +117,37 @@ export class StorageService {
       with_payload: true,
     });
 
-    return results.points.map((point) => {
+    const toFixTags: Array<{ id: string; tags: string[] }> = [];
+
+    const mapped = results.points.map((point) => {
       const payload = point.payload as unknown as MemoryMetadata;
+      const tags = normalizeTags(payload.tags);
+      if (!Array.isArray(payload.tags)) {
+        toFixTags.push({ id: payload.id, tags });
+      }
       return {
         id: payload.id,
         score: point.score ?? 0,
         text: payload.text,
         agent: payload.agent,
         project: payload.project,
-        tags: payload.tags,
+        tags,
         created_at: payload.created_at,
         last_accessed: payload.last_accessed,
         access_count: payload.access_count,
         stability: payload.stability,
       };
     });
+
+    // Auto-fix bad tags in Qdrant (fire and forget)
+    for (const fix of toFixTags) {
+      this.client.setPayload(this.config.collectionName, {
+        payload: { tags: fix.tags },
+        points: [fix.id],
+      }).catch(() => {});
+    }
+
+    return mapped;
   }
 
   async listRecent(limit: number, daysBack: number = 30, project?: string): Promise<SearchResult[]> {
@@ -146,16 +168,22 @@ export class StorageService {
       filter: { must },
     });
 
-    return results.points
+    const toFixTags: Array<{ id: string; tags: string[] }> = [];
+
+    const mapped = results.points
       .map((point) => {
         const payload = point.payload as unknown as MemoryMetadata;
+        const tags = normalizeTags(payload.tags);
+        if (!Array.isArray(payload.tags)) {
+          toFixTags.push({ id: payload.id, tags });
+        }
         return {
           id: payload.id,
           score: 1,
           text: payload.text,
           agent: payload.agent,
           project: payload.project,
-          tags: payload.tags,
+          tags,
           created_at: payload.created_at,
           last_accessed: payload.last_accessed,
           access_count: payload.access_count,
@@ -163,6 +191,16 @@ export class StorageService {
         };
       })
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    // Auto-fix bad tags in Qdrant (fire and forget)
+    for (const fix of toFixTags) {
+      this.client.setPayload(this.config.collectionName, {
+        payload: { tags: fix.tags },
+        points: [fix.id],
+      }).catch(() => {});
+    }
+
+    return mapped;
   }
 
   async update(id: string, params: StoreParams): Promise<void> {
