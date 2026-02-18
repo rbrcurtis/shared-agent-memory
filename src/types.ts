@@ -5,6 +5,10 @@ export interface MemoryMetadata {
   project: string;
   tags: string[];
   created_at: string;
+  last_accessed?: string;
+  access_count?: number;
+  stability?: number;
+  tombstoned_at?: string;
 }
 
 export interface MemoryPoint {
@@ -36,6 +40,10 @@ export interface SearchResult {
   project: string;
   tags: string[];
   created_at: string;
+  last_accessed?: string;
+  access_count?: number;
+  stability?: number;
+  retention?: number;
 }
 
 export interface ServerConfig {
