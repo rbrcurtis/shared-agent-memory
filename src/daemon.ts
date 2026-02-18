@@ -117,12 +117,14 @@ async function handleRequest(method: string, params: Record<string, unknown>): P
 
     case 'search_memory': {
       const storage = await getStorage(params);
-      const vector = await embeddings.generateEmbedding(params.query as string);
+      const queryText = params.query as string;
+      const vector = await embeddings.generateEmbedding(queryText);
       const requestedLimit = (params.limit as number) || 10;
 
       // Over-fetch to compensate for retention re-ranking
       const results = await storage.search({
         vector,
+        queryText,
         limit: requestedLimit * OVER_FETCH_MULTIPLIER,
         agent: params.agent as string | undefined,
         project: params.project as string | undefined,
