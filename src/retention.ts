@@ -2,6 +2,10 @@ export const BASE_HALF_LIFE = 90; // days
 export const OVER_FETCH_MULTIPLIER = 3;
 export const TOMBSTONE_THRESHOLD = 0.01;
 
+export const DENSE_VECTOR_NAME = 'dense';
+export const BM25_VECTOR_NAME = 'text-bm25';
+export const BM25_MODEL = 'Qdrant/bm25';
+
 /**
  * stability = 1.0 + ln(1 + access_count)
  * Diminishing returns: 0->1.0, 1->1.69, 5->2.79, 20->4.04
