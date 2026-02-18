@@ -5,6 +5,7 @@ import readline from 'readline';
 import { StorageService } from './storage.js';
 import { EmbeddingService } from './embeddings.js';
 import { ServerConfig } from './types.js';
+import { computeRetention, OVER_FETCH_MULTIPLIER, TOMBSTONE_THRESHOLD } from './retention.js';
 
 // Socket path (cross-platform)
 const SOCKET_PATH = process.platform === 'win32'
@@ -117,14 +118,55 @@ async function handleRequest(method: string, params: Record<string, unknown>): P
     case 'search_memory': {
       const storage = await getStorage(params);
       const vector = await embeddings.generateEmbedding(params.query as string);
+      const requestedLimit = (params.limit as number) || 10;
+
+      // Over-fetch to compensate for retention re-ranking
       const results = await storage.search({
         vector,
-        limit: (params.limit as number) || 10,
+        limit: requestedLimit * OVER_FETCH_MULTIPLIER,
         agent: params.agent as string | undefined,
         project: params.project as string | undefined,
         tags: params.tags as string[] | undefined,
       });
-      return { results };
+
+      const now = Date.now();
+      const toTombstone: string[] = [];
+      const scored: Array<typeof results[number] & { retention: number }> = [];
+
+      for (const r of results) {
+        const lastAccessed = r.last_accessed || r.created_at;
+        const daysSince = (now - new Date(lastAccessed).getTime()) / (1000 * 60 * 60 * 24);
+        const stability = r.stability ?? 1.0;
+        const retention = computeRetention(daysSince, stability);
+
+        if (retention < TOMBSTONE_THRESHOLD) {
+          toTombstone.push(r.id);
+        } else {
+          scored.push({ ...r, score: r.score * retention, retention });
+        }
+      }
+
+      // Sort by decay-adjusted score, take top N
+      scored.sort((a, b) => b.score - a.score);
+      const final = scored.slice(0, requestedLimit);
+
+      // Async: tombstone decayed memories (fire and forget)
+      if (toTombstone.length > 0) {
+        storage.tombstoneMemories(toTombstone).catch((err: unknown) => {
+          log(`Failed to tombstone memories: ${err}`);
+        });
+      }
+
+      // Async: reinforce returned memories (fire and forget)
+      if (final.length > 0) {
+        storage.reinforceMemories(
+          final.map((r) => ({ id: r.id, accessCount: r.access_count ?? 0 }))
+        ).catch((err: unknown) => {
+          log(`Failed to reinforce memories: ${err}`);
+        });
+      }
+
+      return { results: final };
     }
 
     case 'list_recent': {
