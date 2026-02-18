@@ -1,6 +1,6 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
 import { ServerConfig, MemoryMetadata, SearchResult } from './types.js';
-import { computeStability } from './retention.js';
+import { computeStability, DENSE_VECTOR_NAME, BM25_VECTOR_NAME, BM25_MODEL } from './retention.js';
 import { randomUUID } from 'crypto';
 
 interface StoreParams {
@@ -13,6 +13,7 @@ interface StoreParams {
 
 interface SearchParams {
   vector: number[];
+  queryText: string;
   limit: number;
   agent?: string;
   project?: string;
@@ -46,7 +47,12 @@ export class StorageService {
 
     if (!exists) {
       await this.client.createCollection(this.config.collectionName, {
-        vectors: { size: this.vectorSize, distance: 'Cosine' },
+        vectors: {
+          [DENSE_VECTOR_NAME]: { size: this.vectorSize, distance: 'Cosine' },
+        },
+        sparse_vectors: {
+          [BM25_VECTOR_NAME]: { modifier: 'idf' as any },
+        },
       });
       console.error(`Created collection: ${this.config.collectionName}`);
     }
@@ -69,7 +75,14 @@ export class StorageService {
 
     await this.client.upsert(this.config.collectionName, {
       wait: true,
-      points: [{ id, vector: params.vector, payload }],
+      points: [{
+        id,
+        vector: {
+          [DENSE_VECTOR_NAME]: params.vector,
+          [BM25_VECTOR_NAME]: { text: params.text, model: BM25_MODEL } as any,
+        },
+        payload,
+      }],
     });
 
     return id;
@@ -79,9 +92,22 @@ export class StorageService {
     const filter = this.buildFilter(params);
 
     const results = await this.client.query(this.config.collectionName, {
-      query: params.vector,
+      prefetch: [
+        {
+          query: params.vector,
+          using: DENSE_VECTOR_NAME,
+          limit: params.limit,
+          filter,
+        },
+        {
+          query: { text: params.queryText, model: BM25_MODEL } as any,
+          using: BM25_VECTOR_NAME,
+          limit: params.limit,
+          filter,
+        },
+      ],
+      query: { fusion: 'rrf' } as any,
       limit: params.limit,
-      filter,
       with_payload: true,
     });
 
@@ -155,7 +181,14 @@ export class StorageService {
 
     await this.client.upsert(this.config.collectionName, {
       wait: true,
-      points: [{ id, vector: params.vector, payload }],
+      points: [{
+        id,
+        vector: {
+          [DENSE_VECTOR_NAME]: params.vector,
+          [BM25_VECTOR_NAME]: { text: params.text, model: BM25_MODEL } as any,
+        },
+        payload,
+      }],
     });
   }
 
