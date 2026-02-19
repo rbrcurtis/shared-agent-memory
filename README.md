@@ -125,12 +125,69 @@ node dist/index.js \
 
 | Tool | Description |
 |------|-------------|
-| `store_memory` | Store text in current project, generates embedding automatically |
-| `search_memory` | Semantic search within current project |
-| `list_recent` | List recent memories in current project |
-| `update_memory` | Update existing memory with new text |
+| `store_memory` | Store text with a title, generates embedding automatically |
+| `search_memory` | Semantic search — returns titles and IDs only |
+| `load_memories` | Load full text by IDs, reinforces loaded memories |
+| `list_recent` | List recent memories — returns titles and IDs |
+| `update_memory` | Update existing memory with new text and title |
 | `delete_memory` | Remove a memory by ID |
 | `get_config` | Show current configuration and daemon status |
+
+### Two-Step Search
+
+Search is designed for context efficiency. Instead of dumping full text for every result, it returns compact titles so the agent can pick which memories to actually read:
+
+1. **`search_memory`** — returns a list of titles with IDs and relevance scores
+2. Agent reviews titles, picks the relevant ones
+3. **`load_memories`** — fetches full text for selected IDs
+
+This matters because AI agents have limited context windows. Returning 10 full memories might consume thousands of tokens, most of which are irrelevant. Titles let the agent be selective.
+
+## Ebbinghaus Forgetting Curve
+
+Memories decay over time using a model inspired by the [Ebbinghaus forgetting curve](https://en.wikipedia.org/wiki/Forgetting_curve). This ensures that unused memories fade naturally while frequently-accessed memories persist.
+
+### How It Works
+
+Each memory tracks three fields:
+
+- **`last_accessed`** — timestamp of the last time the memory was loaded
+- **`access_count`** — how many times it has been loaded
+- **`stability`** — derived from access_count, controls how slowly the memory decays
+
+The retention (probability of recall) at time `t` days since last access is:
+
+```
+retention = e^(-t / (BASE_HALF_LIFE * stability / ln(2)))
+```
+
+With `BASE_HALF_LIFE = 30 days`, a never-accessed memory (stability = 1.0) drops to 50% retention after 30 days. Frequently-accessed memories decay much slower because their stability grows logarithmically:
+
+| Access Count | Stability | Effective Half-Life |
+|-------------|-----------|-------------------|
+| 0 | 1.0 | 30 days |
+| 1 | 1.69 | 51 days |
+| 5 | 2.79 | 84 days |
+| 10 | 3.40 | 102 days |
+| 20 | 4.04 | 121 days |
+
+### Reinforcement Through Loading, Not Searching
+
+The key design choice: **searching does not reinforce memories**. Only `load_memories` (explicitly fetching full text) counts as an access. This means:
+
+- A memory that appears in search results but is never loaded will naturally decay
+- Only memories the agent finds useful enough to read get reinforced
+- The system learns which memories matter through actual usage, not just semantic proximity
+
+### Tombstoning
+
+When a memory's retention drops below 1% (`TOMBSTONE_THRESHOLD = 0.01`), it is soft-deleted by setting a `tombstoned_at` timestamp. Tombstoned memories are excluded from all future queries but remain in Qdrant for potential recovery.
+
+Tombstone checks happen lazily during search — when a search returns a decayed memory, it gets tombstoned as a side effect.
+
+### Search Re-Ranking
+
+During search, the raw similarity score from Qdrant is multiplied by the retention value. This means recent, frequently-used memories rank higher than stale ones, even if the stale memory is a slightly better semantic match. To compensate for filtering, search over-fetches 3x the requested limit before applying retention re-ranking and trimming to the final result set.
 
 ## Architecture
 
