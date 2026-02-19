@@ -79,15 +79,16 @@ async function main(): Promise<void> {
           type: 'object',
           properties: {
             text: { type: 'string', description: 'The memory content to store' },
+            title: { type: 'string', description: 'Short descriptive title for the memory (max 10 words)' },
             agent: { type: 'string', description: 'Agent identifier (e.g., claude-code, cursor)' },
             tags: { type: 'array', items: { type: 'string' }, description: 'Tags for categorization' },
           },
-          required: ['text'],
+          required: ['text', 'title'],
         },
       },
       {
         name: 'search_memory',
-        description: 'Search memories by semantic similarity within the current project.',
+        description: 'Search memories by semantic similarity. Returns titles and IDs only — use load_memories to get full text for selected results.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -100,8 +101,19 @@ async function main(): Promise<void> {
         },
       },
       {
+        name: 'load_memories',
+        description: 'Load full text of memories by IDs. Use after search_memory to retrieve details for selected results. Reinforces loaded memories.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            ids: { type: 'array', items: { type: 'string' }, description: 'Memory IDs to load in full' },
+          },
+          required: ['ids'],
+        },
+      },
+      {
         name: 'list_recent',
-        description: 'List recent memories within the current project.',
+        description: 'List recent memories within the current project. Returns titles and IDs — use load_memories for full text.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -118,6 +130,7 @@ async function main(): Promise<void> {
           properties: {
             id: { type: 'string', description: 'Memory ID to update' },
             text: { type: 'string', description: 'New memory content' },
+            title: { type: 'string', description: 'New title for the memory' },
           },
           required: ['id', 'text'],
         },
@@ -151,6 +164,7 @@ async function main(): Promise<void> {
       case 'store_memory': {
         const result = await client.storeMemory({
           text: toolArgs.text as string,
+          title: (toolArgs.title as string) || '',
           agent: (toolArgs.agent as string) || defaultAgent,
           project: defaultProject,
           tags: toolArgs.tags as string[] | undefined,
@@ -173,7 +187,23 @@ async function main(): Promise<void> {
             text: results.length === 0
               ? 'No memories found.'
               : results.map((r, i) =>
-                  `[${i + 1}] (score: ${r.score.toFixed(3)}) [${r.agent}/${r.project}]\nID: ${r.id}\n${r.text}\nTags: ${Array.isArray(r.tags) ? r.tags.join(', ') : 'none'} | Created: ${r.created_at}`
+                  `[${i + 1}] (score: ${r.score.toFixed(3)}) ${r.id}\n${r.title || '(untitled)'}`
+                ).join('\n'),
+          }],
+        };
+      }
+
+      case 'load_memories': {
+        const ids = toolArgs.ids as string[];
+        const result = await client.loadMemories(ids);
+        const results = result.results as SearchResult[];
+        return {
+          content: [{
+            type: 'text',
+            text: results.length === 0
+              ? 'No memories found for the given IDs.'
+              : results.map((r, i) =>
+                  `[${i + 1}] [${r.agent}/${r.project}]\nID: ${r.id}\nTitle: ${r.title || '(untitled)'}\n${r.text}\nTags: ${Array.isArray(r.tags) ? r.tags.join(', ') : 'none'} | Created: ${r.created_at}`
                 ).join('\n\n'),
           }],
         };
@@ -190,8 +220,8 @@ async function main(): Promise<void> {
             text: results.length === 0
               ? 'No recent memories.'
               : results.map((r, i) =>
-                  `[${i + 1}] [${r.agent}/${r.project}] ${r.created_at}\nID: ${r.id}\n${r.text}`
-                ).join('\n\n'),
+                  `[${i + 1}] ${r.id} ${r.created_at}\n${r.title || '(untitled)'}`
+                ).join('\n'),
           }],
         };
       }
@@ -199,7 +229,8 @@ async function main(): Promise<void> {
       case 'update_memory': {
         const id = toolArgs.id as string;
         const text = toolArgs.text as string;
-        await client.updateMemory({ id, text, project: defaultProject });
+        const title = toolArgs.title as string | undefined;
+        await client.updateMemory({ id, text, title, project: defaultProject });
         return { content: [{ type: 'text', text: `Memory ${id} updated.` }] };
       }
 

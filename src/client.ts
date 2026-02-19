@@ -108,6 +108,7 @@ export async function call(method: string, params: Record<string, unknown> = {})
 // Convenience methods
 export async function storeMemory(params: {
   text: string;
+  title: string;
   agent?: string;
   project?: string;
   tags?: string[];
@@ -136,9 +137,14 @@ export async function listRecent(params: {
 export async function updateMemory(params: {
   id: string;
   text: string;
+  title?: string;
   project?: string;
 }): Promise<{ success: boolean }> {
   return call('update_memory', params) as Promise<{ success: boolean }>;
+}
+
+export async function loadMemories(ids: string[]): Promise<{ results: unknown[] }> {
+  return call('load_memories', { ids }) as Promise<{ results: unknown[] }>;
 }
 
 export async function deleteMemory(id: string): Promise<{ success: boolean }> {

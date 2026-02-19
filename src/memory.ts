@@ -28,6 +28,7 @@ export class MemoryService {
 
     return this.storage.store({
       text: request.text,
+      title: '',
       vector,
       agent: request.agent || this.config.defaultAgent,
       project: request.project || this.config.defaultProject,
@@ -56,6 +57,7 @@ export class MemoryService {
     const vector = await this.embeddings.generateEmbedding(text);
     await this.storage.update(id, {
       text,
+      title: '',
       vector,
       agent: this.config.defaultAgent,
       project: project || this.config.defaultProject,

@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 
 interface StoreParams {
   text: string;
+  title: string;
   vector: number[];
   agent: string;
   project: string;
@@ -70,6 +71,7 @@ export class StorageService {
     const payload: Record<string, unknown> = {
       id,
       text: params.text,
+      title: params.title,
       agent: params.agent,
       project: params.project,
       tags: params.tags,
@@ -129,6 +131,7 @@ export class StorageService {
         id: payload.id,
         score: point.score ?? 0,
         text: payload.text,
+        title: payload.title || '',
         agent: payload.agent,
         project: payload.project,
         tags,
@@ -181,6 +184,7 @@ export class StorageService {
           id: payload.id,
           score: 1,
           text: payload.text,
+          title: payload.title || '',
           agent: payload.agent,
           project: payload.project,
           tags,
@@ -203,11 +207,37 @@ export class StorageService {
     return mapped;
   }
 
+  async getByIds(ids: string[]): Promise<SearchResult[]> {
+    const results = await this.client.retrieve(this.config.collectionName, {
+      ids,
+      with_payload: true,
+    });
+
+    return results.map((point) => {
+      const payload = point.payload as unknown as MemoryMetadata;
+      const tags = normalizeTags(payload.tags);
+      return {
+        id: payload.id,
+        score: 1,
+        text: payload.text,
+        title: payload.title || '',
+        agent: payload.agent,
+        project: payload.project,
+        tags,
+        created_at: payload.created_at,
+        last_accessed: payload.last_accessed,
+        access_count: payload.access_count,
+        stability: payload.stability,
+      };
+    });
+  }
+
   async update(id: string, params: StoreParams): Promise<void> {
     const now = new Date().toISOString();
     const payload: Record<string, unknown> = {
       id,
       text: params.text,
+      title: params.title,
       agent: params.agent,
       project: params.project,
       tags: params.tags,
