@@ -1,6 +1,7 @@
 export interface MemoryMetadata {
   id: string;
   text: string;
+  title: string;
   agent: string;
   project: string;
   tags: string[];
@@ -36,6 +37,7 @@ export interface SearchResult {
   id: string;
   score: number;
   text: string;
+  title: string;
   agent: string;
   project: string;
   tags: string[];

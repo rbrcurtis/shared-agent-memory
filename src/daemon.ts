@@ -107,6 +107,7 @@ async function handleRequest(method: string, params: Record<string, unknown>): P
       const vector = await embeddings.generateEmbedding(params.text as string);
       const id = await storage.store({
         text: params.text as string,
+        title: (params.title as string) || '',
         vector,
         agent: (params.agent as string) || 'unknown',
         project: (params.project as string) || 'default',
@@ -159,15 +160,6 @@ async function handleRequest(method: string, params: Record<string, unknown>): P
         });
       }
 
-      // Async: reinforce returned memories (fire and forget)
-      if (final.length > 0) {
-        storage.reinforceMemories(
-          final.map((r) => ({ id: r.id, accessCount: r.access_count ?? 0 }))
-        ).catch((err: unknown) => {
-          log(`Failed to reinforce memories: ${err}`);
-        });
-      }
-
       return { results: final };
     }
 
@@ -180,6 +172,23 @@ async function handleRequest(method: string, params: Record<string, unknown>): P
       return { results };
     }
 
+    case 'load_memories': {
+      const storage = await getStorage(params);
+      const ids = params.ids as string[];
+      const results = await storage.getByIds(ids);
+
+      // Reinforce loaded memories (fire and forget)
+      if (results.length > 0) {
+        storage.reinforceMemories(
+          results.map((r) => ({ id: r.id, accessCount: r.access_count ?? 0 }))
+        ).catch((err: unknown) => {
+          log(`Failed to reinforce memories: ${err}`);
+        });
+      }
+
+      return { results };
+    }
+
     case 'update_memory': {
       const storage = await getStorage(params);
       const id = params.id as string;
@@ -187,6 +196,7 @@ async function handleRequest(method: string, params: Record<string, unknown>): P
       const vector = await embeddings.generateEmbedding(text);
       await storage.update(id, {
         text,
+        title: (params.title as string) || '',
         vector,
         agent: 'unknown',
         project: (params.project as string) || 'default',

@@ -55,11 +55,28 @@ claude mcp add-json shared-memory '{
 ## Verification
 
 After restarting, these tools should be available:
-- `store_memory` - Store text with automatic embedding
-- `search_memory` - Semantic search within current project
-- `list_recent` - List recent memories
+- `store_memory` - Store text with a title and automatic embedding
+- `search_memory` - Semantic search, returns titles and IDs only
+- `load_memories` - Load full text for selected memory IDs (use after search)
+- `list_recent` - List recent memories (titles and IDs)
 - `update_memory` - Update existing memory
 - `delete_memory` - Remove a memory by ID
+
+## Two-Step Search Pattern
+
+Memories use a title + body model for context efficiency:
+
+1. **`search_memory`** — returns titles and IDs only (lightweight)
+2. Review titles, pick the relevant ones
+3. **`load_memories`** — load full text for selected IDs (reinforces those memories)
+
+This keeps search results compact and only reinforces memories you actually use.
+
+## Storing Memories
+
+When calling `store_memory`, always provide both `title` and `text`:
+- **title**: Short descriptive title (max 10 words)
+- **text**: Full memory content
 
 ## Notes
 
@@ -67,3 +84,4 @@ After restarting, these tools should be available:
 - **Multi-Qdrant**: The daemon supports multiple Qdrant servers simultaneously. Project config overrides user config.
 - Memories are automatically scoped to the current project (detected from git remote or folder name)
 - Omit QDRANT_API_KEY from env if not needed
+- Memories decay over 30 days if not accessed — frequently used memories persist longer

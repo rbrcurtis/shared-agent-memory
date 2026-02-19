@@ -1,4 +1,4 @@
-export const BASE_HALF_LIFE = 90; // days
+export const BASE_HALF_LIFE = 30; // days
 export const OVER_FETCH_MULTIPLIER = 3;
 export const TOMBSTONE_THRESHOLD = 0.01;
 
