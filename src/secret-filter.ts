@@ -18,6 +18,16 @@ export function shannonEntropy(s: string): number {
   return entropy;
 }
 
+const KEYWORDS = [
+  'key', 'token', 'password', 'passwd', 'secret', 'credential',
+  'auth', 'bearer', 'api_key', 'apikey', 'api-key', 'access_key',
+  'private_key',
+];
+
+const PROXIMITY = 50;
+const MIN_ENTROPY = 3.2;
+const MIN_LENGTH = 9;
+
 const PREFIX_RULES: Array<{ id: string; pattern: RegExp }> = [
   { id: 'github-pat', pattern: /ghp_[a-zA-Z0-9]{36,}/ },
   { id: 'github-oauth', pattern: /gho_[a-zA-Z0-9]{36,}/ },
@@ -90,6 +100,25 @@ export function detectSecrets(text: string): SecretDetection | null {
         position: m.index,
         snippet: maskSnippet(text, m.index, m[0].length),
       };
+    }
+  }
+
+  // Layer 3: entropy + keyword proximity
+  const candidateRe = /[a-zA-Z0-9_+/=-]{9,}/g;
+  const lowerText = text.toLowerCase();
+  while ((m = candidateRe.exec(text)) !== null) {
+    if (shannonEntropy(m[0]) < MIN_ENTROPY) continue;
+    const windowStart = Math.max(0, m.index - PROXIMITY);
+    const windowEnd = Math.min(text.length, m.index + m[0].length + PROXIMITY);
+    const window = lowerText.slice(windowStart, windowEnd);
+    for (const kw of KEYWORDS) {
+      if (window.includes(kw)) {
+        return {
+          rule: 'keyword-proximity',
+          position: m.index,
+          snippet: maskSnippet(text, m.index, m[0].length),
+        };
+      }
     }
   }
 

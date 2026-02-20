@@ -149,3 +149,57 @@ describe('detectSecrets -- Layer 2: long high-entropy strings', () => {
     expect(r!.rule).toBe('high-entropy-base64');
   });
 });
+
+describe('detectSecrets -- Layer 3: entropy + keyword proximity', () => {
+  it('detects short secret near "api key" keyword', () => {
+    const r = detectSecrets('the API key is xK9mQ2bR7pL4');
+    expect(r).not.toBeNull();
+    expect(r!.rule).toBe('keyword-proximity');
+  });
+
+  it('detects secret near "token" keyword', () => {
+    const r = detectSecrets('token: dR4kL9mQ2x');
+    expect(r).not.toBeNull();
+    expect(r!.rule).toBe('keyword-proximity');
+  });
+
+  it('detects secret near "password" keyword', () => {
+    const r = detectSecrets('password is Xt7bQ9kL2m');
+    expect(r).not.toBeNull();
+    expect(r!.rule).toBe('keyword-proximity');
+  });
+
+  it('detects secret near "secret" keyword', () => {
+    const r = detectSecrets('client secret: mN8pR3kL7x');
+    expect(r).not.toBeNull();
+    expect(r!.rule).toBe('keyword-proximity');
+  });
+
+  it('does not flag low-entropy string near keyword', () => {
+    const r = detectSecrets('the api key is abcabcabc');
+    expect(r).toBeNull();
+  });
+
+  it('does not flag high-entropy string far from keyword', () => {
+    const r = detectSecrets('The system uses advanced encryption. Many other things happen in between that push the distance well beyond fifty characters. xK9mQ2bR7pL4');
+    expect(r).toBeNull();
+  });
+
+  it('detects with underscore keyword variant api_key', () => {
+    const r = detectSecrets('api_key=xK9mQ2bR7pL4');
+    expect(r).not.toBeNull();
+    expect(r!.rule).toBe('keyword-proximity');
+  });
+
+  it('detects with bearer keyword', () => {
+    const r = detectSecrets('Bearer xK9mQ2bR7pL4nZ');
+    expect(r).not.toBeNull();
+    expect(r!.rule).toBe('keyword-proximity');
+  });
+
+  it('is case-insensitive on keywords', () => {
+    const r = detectSecrets('API_KEY=xK9mQ2bR7pL4');
+    expect(r).not.toBeNull();
+    expect(r!.rule).toBe('keyword-proximity');
+  });
+});
