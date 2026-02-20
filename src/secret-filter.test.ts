@@ -172,8 +172,8 @@ describe('detectSecrets -- Layer 2: long high-entropy strings', () => {
 });
 
 describe('detectSecrets -- Layer 3: entropy + keyword proximity', () => {
-  it('detects short secret near "api key" keyword', () => {
-    const r = detectSecrets('the API key is xK9mQ2bR7pL4');
+  it('detects short secret near api_key keyword', () => {
+    const r = detectSecrets('the api_key is xK9mQ2bR7pL4');
     expect(r).not.toBeNull();
     expect(r!.rule).toBe('keyword-proximity');
   });
@@ -225,14 +225,46 @@ describe('detectSecrets -- Layer 3: entropy + keyword proximity', () => {
   });
 
   it('does not match keyword substring inside larger word', () => {
-    const r = detectSecrets('The Elasticsearch .keyword field type is optimized for filtering.');
+    const r = detectSecrets('The tokenization process is optimized for search filtering.');
     expect(r).toBeNull();
   });
 
   it('detects secret near kubeconfig keyword', () => {
-    const r = detectSecrets('KUBECONFIG=/home/ryan/dR4kL9mQ2x');
+    const r = detectSecrets('kubeconfig contains dR4kL9mQ2x');
     expect(r).not.toBeNull();
     expect(r!.rule).toBe('keyword-proximity');
+  });
+});
+
+describe('detectSecrets -- false positive resistance', () => {
+  it('does not flag standalone "key" in prose', () => {
+    const r = detectSecrets('Key files: src/app/routes/scheduling.$id.tsx');
+    expect(r).toBeNull();
+  });
+
+  it('does not flag standalone "auth" in architecture notes', () => {
+    const r = detectSecrets('Current web auth: cookie-based sessions via Redis.');
+    expect(r).toBeNull();
+  });
+
+  it('does not flag kebab-case identifiers near keywords', () => {
+    const r = detectSecrets('The secret module uses graphql-yoga-server for resolvers.');
+    expect(r).toBeNull();
+  });
+
+  it('does not flag kebab-case identifiers in base64 detection', () => {
+    const r = detectSecrets('Install codetrix-studio/capacitor-google-auth for OAuth.');
+    expect(r).toBeNull();
+  });
+
+  it('does not flag code identifiers near keywords in Layer 3', () => {
+    const r = detectSecrets('The token logic lives in loginWithGoogleCode function.');
+    expect(r).toBeNull();
+  });
+
+  it('does not flag file paths near keywords in Layer 3', () => {
+    const r = detectSecrets('The secret config is at src/graphql/resolvers/data module.');
+    expect(r).toBeNull();
   });
 });
 
