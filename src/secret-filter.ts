@@ -18,11 +18,11 @@ export function shannonEntropy(s: string): number {
   return entropy;
 }
 
-const KEYWORDS = [
+const KEYWORD_PATTERNS = [
   'key', 'token', 'password', 'passwd', 'secret', 'credential',
   'auth', 'bearer', 'api_key', 'apikey', 'api-key', 'access_key',
-  'private_key',
-];
+  'private_key', 'kubeconfig',
+].map(kw => new RegExp(`\\b${kw}\\b`, 'i'));
 
 const PROXIMITY = 50;
 const MIN_ENTROPY = 3.2;
@@ -55,6 +55,21 @@ const PREFIX_RULES: Array<{ id: string; pattern: RegExp }> = [
   { id: 'telegram-bot-token', pattern: /[0-9]{8,10}:[a-zA-Z0-9_-]{35}/ },
 ];
 
+// Skip base64 matches that look like code identifiers or file paths
+function looksLikeCode(s: string): boolean {
+  let lowerCount = 0;
+  for (const c of s) {
+    if (c >= 'a' && c <= 'z') lowerCount++;
+  }
+  const lowerPct = lowerCount / s.length;
+  // camelCase/PascalCase: 5+ lowercase then uppercase, AND predominantly lowercase (>75%)
+  // Real secrets have more balanced character distribution (~40-50% lowercase)
+  if (/[a-z]{5,}[A-Z]/.test(s) && lowerPct > 0.75) return true;
+  // File path: slash followed by 3+ lowercase (real path segment, not random base64 like /v)
+  if (/\/[a-z]{3,}/.test(s)) return true;
+  return false;
+}
+
 function maskSnippet(text: string, pos: number, len: number): string {
   const start = Math.max(0, pos - 20);
   const end = Math.min(text.length, pos + len + 20);
@@ -79,8 +94,8 @@ export function detectSecrets(text: string): SecretDetection | null {
   // Layer 2: long high-entropy strings
   let m: RegExpExecArray | null;
 
-  // Hex: 33+ contiguous hex chars (checked before base64 since hex is a subset of base64 charset)
-  const hexRe = /[a-fA-F0-9]{33,}/g;
+  // Hex: 32+ contiguous hex chars (checked before base64 since hex is a subset of base64 charset)
+  const hexRe = /[a-fA-F0-9]{32,}/g;
   while ((m = hexRe.exec(text)) !== null) {
     if (shannonEntropy(m[0]) > 3.0) {
       return {
@@ -92,8 +107,10 @@ export function detectSecrets(text: string): SecretDetection | null {
   }
 
   // Base64: 17+ chars of [A-Za-z0-9+/] with optional = padding
+  // Skip matches that look like code identifiers (camelCase) or file paths
   const base64Re = /[A-Za-z0-9+/]{17,}={0,2}/g;
   while ((m = base64Re.exec(text)) !== null) {
+    if (looksLikeCode(m[0])) continue;
     if (shannonEntropy(m[0]) > 3.0) {
       return {
         rule: 'high-entropy-base64',
@@ -103,16 +120,15 @@ export function detectSecrets(text: string): SecretDetection | null {
     }
   }
 
-  // Layer 3: entropy + keyword proximity
+  // Layer 3: entropy + keyword proximity (word-boundary matching)
   const candidateRe = /[a-zA-Z0-9_+/=-]{9,}/g;
-  const lowerText = text.toLowerCase();
   while ((m = candidateRe.exec(text)) !== null) {
     if (shannonEntropy(m[0]) < MIN_ENTROPY) continue;
     const windowStart = Math.max(0, m.index - PROXIMITY);
     const windowEnd = Math.min(text.length, m.index + m[0].length + PROXIMITY);
-    const window = lowerText.slice(windowStart, windowEnd);
-    for (const kw of KEYWORDS) {
-      if (window.includes(kw)) {
+    const window = text.slice(windowStart, windowEnd);
+    for (const kwRe of KEYWORD_PATTERNS) {
+      if (kwRe.test(window)) {
         return {
           rule: 'keyword-proximity',
           position: m.index,
