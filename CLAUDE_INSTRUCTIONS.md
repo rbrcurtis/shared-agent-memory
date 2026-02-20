@@ -61,6 +61,7 @@ After restarting, these tools should be available:
 - `list_recent` - List recent memories (titles and IDs)
 - `update_memory` - Update existing memory
 - `delete_memory` - Remove a memory by ID
+- `get_config` - Show current configuration and daemon status
 
 ## Two-Step Search Pattern
 
