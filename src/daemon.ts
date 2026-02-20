@@ -109,7 +109,7 @@ async function handleRequest(method: string, params: Record<string, unknown>): P
       const detection = detectSecrets(text) || detectSecrets(title);
       if (detection) {
         throw new Error(
-          `Memory rejected: detected what appears to be a secret (${detection.rule} at position ${detection.position}). Context: ${detection.snippet}. Please redact sensitive values before storing.`
+          `Memory rejected: detected what appears to be a secret (${detection.rule} at position ${detection.position}). Context: ${detection.snippet}. Store secrets in .env files or other files not checked into git, then reference the file path in your memory instead.`
         );
       }
       const storage = await getStorage(params);
@@ -205,7 +205,7 @@ async function handleRequest(method: string, params: Record<string, unknown>): P
       const detection = detectSecrets(text) || detectSecrets(title);
       if (detection) {
         throw new Error(
-          `Memory rejected: detected what appears to be a secret (${detection.rule} at position ${detection.position}). Context: ${detection.snippet}. Please redact sensitive values before storing.`
+          `Memory rejected: detected what appears to be a secret (${detection.rule} at position ${detection.position}). Context: ${detection.snippet}. Store secrets in .env files or other files not checked into git, then reference the file path in your memory instead.`
         );
       }
       const storage = await getStorage(params);

@@ -1,6 +1,17 @@
 # Shared Agent Memory
 
-MCP server enabling multiple AI agents to share persistent memory via Qdrant. Features hybrid search (dense + BM25), Ebbinghaus forgetting curve for memory lifecycle, secret detection to prevent storing credentials, and a web UI for browsing memories.
+MCP server enabling multiple AI agents to share persistent memory via Qdrant.
+
+## Features
+
+- **Hybrid search** — dense vector similarity (all-MiniLM-L6-v2) + BM25 keyword matching, fused with Reciprocal Rank Fusion
+- **Ebbinghaus forgetting curve** — memories decay over time; frequently-accessed memories persist, unused ones fade and get tombstoned
+- **Secret filtering** — three-layer detection (known token prefixes, high-entropy strings, keyword proximity) rejects memories containing API keys, tokens, or credentials
+- **Memory browser** — standalone web UI for browsing, searching, editing, and deleting memories directly via Qdrant's REST API
+- **Multi-agent / multi-Qdrant** — multiple AI agents share the same memory store; different projects can point to different Qdrant instances
+- **Two-step search** — returns titles first for context efficiency, then loads full text on demand
+- **Local embeddings** — all-MiniLM-L6-v2 runs locally, zero external API costs
+- **Daemon architecture** — long-running process keeps embedding model warm; auto-starts on first request, shuts down after idle timeout
 
 ## Claude Code Setup
 
