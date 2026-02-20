@@ -1,6 +1,6 @@
 # Shared Agent Memory
 
-MCP server enabling multiple AI agents to share persistent memory via Qdrant.
+MCP server enabling multiple AI agents to share persistent memory via Qdrant. Features hybrid search (dense + BM25), Ebbinghaus forgetting curve for memory lifecycle, secret detection to prevent storing credentials, and a web UI for browsing memories.
 
 ## Claude Code Setup
 
@@ -143,6 +143,15 @@ Search is designed for context efficiency. Instead of dumping full text for ever
 
 This matters because AI agents have limited context windows. Returning 10 full memories might consume thousands of tokens, most of which are irrelevant. Titles let the agent be selective.
 
+### Hybrid Search
+
+Search combines two retrieval strategies using Reciprocal Rank Fusion (RRF):
+
+- **Dense vectors**: Semantic similarity via `all-MiniLM-L6-v2` embeddings (384 dimensions)
+- **BM25 sparse vectors**: Keyword matching via Qdrant's built-in BM25 model
+
+This means a search for "Docker compose" finds memories that mention containers and orchestration (semantic) as well as those that literally say "Docker compose" (keyword). Both strategies are fused into a single ranked result list.
+
 ## Ebbinghaus Forgetting Curve
 
 Memories decay over time using a model inspired by the [Ebbinghaus forgetting curve](https://en.wikipedia.org/wiki/Forgetting_curve). This ensures that unused memories fade naturally while frequently-accessed memories persist.
@@ -188,6 +197,35 @@ Tombstone checks happen lazily during search — when a search returns a decayed
 ### Search Re-Ranking
 
 During search, the raw similarity score from Qdrant is multiplied by the retention value. This means recent, frequently-used memories rank higher than stale ones, even if the stale memory is a slightly better semantic match. To compensate for filtering, search over-fetches 3x the requested limit before applying retention re-ranking and trimming to the final result set.
+
+## Secret Filtering
+
+Memories are scanned for secrets before storage. If a secret is detected, the memory is rejected with an error describing what was found — the calling agent can then redact and retry.
+
+Three detection layers, applied in order:
+
+1. **Known prefix patterns** — regex rules for ~24 known token formats (GitHub PATs, AWS keys, Slack tokens, JWTs, private keys, webhooks, etc.)
+2. **Long high-entropy strings** — base64 strings >16 chars or hex strings >32 chars with high Shannon entropy
+3. **Keyword proximity** — high-entropy strings (>8 chars, entropy >3.2) within 50 characters of keywords like `token`, `password`, `api_key`, `secret`, `bearer`
+
+Applied to both `store_memory` and `update_memory` at the daemon level, covering all clients.
+
+## Memory Browser
+
+A standalone web UI for browsing, searching, editing, and deleting memories. Single HTML file (`web/index.html`) with inline CSS/JS — no build step, no framework, no server.
+
+- Talks directly to Qdrant's REST API (requires CORS enabled on Qdrant)
+- BM25 keyword search via Qdrant's built-in sparse vector query
+- Retention bars showing memory decay status
+- Filter by project, agent, tags; toggle tombstoned memories
+- Edit titles, text, and tags; tombstone-delete memories
+
+Open locally:
+```
+file:///path/to/web/index.html?url=http://localhost:6333&key=YOUR_KEY
+```
+
+For Kubernetes deployment, see `k8s/` directory (nginx serving static files via ConfigMap).
 
 ## Architecture
 
