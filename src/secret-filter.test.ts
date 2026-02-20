@@ -123,6 +123,12 @@ describe('detectSecrets -- Layer 2: long high-entropy strings', () => {
     expect(r!.rule).toBe('high-entropy-hex');
   });
 
+  it('detects 32-char hex string', () => {
+    const r = detectSecrets('key: 6e5d4ed279ad196540f2f0b322642be5');
+    expect(r).not.toBeNull();
+    expect(r!.rule).toBe('high-entropy-hex');
+  });
+
   it('does not flag short git SHA (7 chars)', () => {
     const r = detectSecrets('fixed in commit a3f2b91');
     expect(r).toBeNull();
@@ -140,6 +146,21 @@ describe('detectSecrets -- Layer 2: long high-entropy strings', () => {
 
   it('does not flag common English words that happen to be long', () => {
     const r = detectSecrets('The authentication system uses role-based access control for authorization.');
+    expect(r).toBeNull();
+  });
+
+  it('does not flag camelCase code identifiers', () => {
+    const r = detectSecrets('Called calculateColumnWidths to resize the table layout.');
+    expect(r).toBeNull();
+  });
+
+  it('does not flag PascalCase component names', () => {
+    const r = detectSecrets('Render ContactDrawerV2Container inside the modal.');
+    expect(r).toBeNull();
+  });
+
+  it('does not flag file paths', () => {
+    const r = detectSecrets('Entry point: src/app/routes/scheduling.$id.tsx');
     expect(r).toBeNull();
   });
 
@@ -199,6 +220,17 @@ describe('detectSecrets -- Layer 3: entropy + keyword proximity', () => {
 
   it('is case-insensitive on keywords', () => {
     const r = detectSecrets('API_KEY=xK9mQ2bR7pL4');
+    expect(r).not.toBeNull();
+    expect(r!.rule).toBe('keyword-proximity');
+  });
+
+  it('does not match keyword substring inside larger word', () => {
+    const r = detectSecrets('The Elasticsearch .keyword field type is optimized for filtering.');
+    expect(r).toBeNull();
+  });
+
+  it('detects secret near kubeconfig keyword', () => {
+    const r = detectSecrets('KUBECONFIG=/home/user/dR4kL9mQ2x');
     expect(r).not.toBeNull();
     expect(r!.rule).toBe('keyword-proximity');
   });
