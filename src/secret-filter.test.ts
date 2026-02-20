@@ -266,6 +266,16 @@ describe('detectSecrets -- false positive resistance', () => {
     const r = detectSecrets('The secret config is at src/graphql/resolvers/data module.');
     expect(r).toBeNull();
   });
+
+  it('does not flag all-lowercase words near keywords', () => {
+    const r = detectSecrets('The api_key documentation explains the setup process.');
+    expect(r).toBeNull();
+  });
+
+  it('does not flag all-uppercase IDs in base64 detection', () => {
+    const r = detectSecrets('Route53 zone Z0825814MN8RH94LXOEI was updated.');
+    expect(r).toBeNull();
+  });
 });
 
 describe('detectSecrets -- integration scenarios', () => {
