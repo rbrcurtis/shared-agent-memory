@@ -111,7 +111,7 @@ async function main() {
       if (DRY_RUN) {
         console.log(`[${done}/${needsTitle.length}] ${point.id}: ${title}`);
       } else {
-        await qdrantPut(`/collections/${COLLECTION}/points/payload`, {
+        await qdrantPost(`/collections/${COLLECTION}/points/payload`, {
           payload: { title },
           points: [point.id],
         });
