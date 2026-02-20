@@ -18,6 +18,52 @@ export function shannonEntropy(s: string): number {
   return entropy;
 }
 
+const PREFIX_RULES: Array<{ id: string; pattern: RegExp }> = [
+  { id: 'github-pat', pattern: /ghp_[a-zA-Z0-9]{36,}/ },
+  { id: 'github-oauth', pattern: /gho_[a-zA-Z0-9]{36,}/ },
+  { id: 'github-user-token', pattern: /ghu_[a-zA-Z0-9]{36,}/ },
+  { id: 'github-server-token', pattern: /ghs_[a-zA-Z0-9]{36,}/ },
+  { id: 'github-fine-grained-pat', pattern: /github_pat_[a-zA-Z0-9_]{22,}/ },
+  { id: 'aws-access-key', pattern: /AKIA[0-9A-Z]{16}/ },
+  { id: 'slack-token', pattern: /xox[bpaosr]-[a-zA-Z0-9-]{10,}/ },
+  { id: 'anthropic-api-key', pattern: /sk-ant-[a-zA-Z0-9_-]{20,}/ },
+  { id: 'openai-api-key', pattern: /sk-(?!ant-)[a-zA-Z0-9-]{20,}/ },
+  { id: 'jwt', pattern: /eyJ[a-zA-Z0-9_-]{10,}\.eyJ[a-zA-Z0-9_-]{10,}/ },
+  { id: 'private-key', pattern: /-----BEGIN\s(?:RSA\s|EC\s|DSA\s|OPENSSH\s)?PRIVATE\sKEY-----/ },
+  { id: 'discord-webhook', pattern: /discord(?:app)?\.com\/api\/webhooks\/[0-9]+\/[a-zA-Z0-9_-]+/ },
+  { id: 'slack-webhook', pattern: /hooks\.slack\.com\/services\/[A-Z0-9]+\/[A-Z0-9]+\/[a-zA-Z0-9]+/ },
+  { id: 'cloudflare-api-key', pattern: /v1\.[a-f0-9]{38,}/ },
+  { id: 'gitlab-pat', pattern: /glpat-[a-zA-Z0-9_-]{20,}/ },
+  { id: 'gitlab-deploy-token', pattern: /gldt-[a-zA-Z0-9_-]{20,}/ },
+  { id: 'npm-token', pattern: /npm_[a-zA-Z0-9]{36,}/ },
+  { id: 'pypi-token', pattern: /pypi-[a-zA-Z0-9]{16,}/ },
+  { id: 'sendgrid-api-key', pattern: /SG\.[a-zA-Z0-9_-]{22}\.[a-zA-Z0-9_-]{43}/ },
+  { id: 'square-token', pattern: /sq0[a-z]{3}-[a-zA-Z0-9_-]{22,}/ },
+  { id: 'stripe-key', pattern: /[sr]k_live_[a-zA-Z0-9]{24,}/ },
+  { id: 'twilio-api-key', pattern: /SK[a-f0-9]{32}/ },
+  { id: 'mailgun-api-key', pattern: /key-[a-f0-9]{32}/ },
+  { id: 'telegram-bot-token', pattern: /[0-9]{8,10}:[a-zA-Z0-9_-]{35}/ },
+];
+
+function maskSnippet(text: string, pos: number, len: number): string {
+  const start = Math.max(0, pos - 20);
+  const end = Math.min(text.length, pos + len + 20);
+  const before = text.slice(start, pos);
+  const after = text.slice(pos + len, end);
+  return `${start > 0 ? '...' : ''}${before}***${after}${end < text.length ? '...' : ''}`;
+}
+
 export function detectSecrets(text: string): SecretDetection | null {
-  return null; // stub -- layers added in subsequent tasks
+  // Layer 1: known prefixes
+  for (const rule of PREFIX_RULES) {
+    const match = rule.pattern.exec(text);
+    if (match) {
+      return {
+        rule: rule.id,
+        position: match.index,
+        snippet: maskSnippet(text, match.index, match[0].length),
+      };
+    }
+  }
+  return null;
 }
