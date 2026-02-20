@@ -203,3 +203,35 @@ describe('detectSecrets -- Layer 3: entropy + keyword proximity', () => {
     expect(r!.rule).toBe('keyword-proximity');
   });
 });
+
+describe('detectSecrets -- integration scenarios', () => {
+  it('catches real Qdrant API key pattern from audit', () => {
+    const r = detectSecrets('Qdrant API key: jIjDsxsNhCCbVGhSNa6Bx7ydVcRfJI1rjINPxu6aFKY=');
+    expect(r).not.toBeNull();
+  });
+
+  it('catches Jenkins API token pattern from audit', () => {
+    const r = detectSecrets('Jenkins token 1143406d9c9ae84c0f646a27bdd964cae3');
+    expect(r).not.toBeNull();
+  });
+
+  it('catches Discord webhook URL from audit', () => {
+    const r = detectSecrets('Discord webhook: https://discord.com/api/webhooks/123456789/aBcDeFgHiJkLmNoPqRsTuVwXyZ');
+    expect(r).not.toBeNull();
+  });
+
+  it('allows normal memory text', () => {
+    const r = detectSecrets('Helm manages the Qdrant secret via apiKey value. Use helm upgrade --reuse-values to rotate.');
+    expect(r).toBeNull();
+  });
+
+  it('allows memory with short code references', () => {
+    const r = detectSecrets('Fixed the bug in daemon.ts by reordering initialization. Model loads before socket listen.');
+    expect(r).toBeNull();
+  });
+
+  it('allows memory with technical terms', () => {
+    const r = detectSecrets('The retention formula uses e^(-days / (BASE_HALF_LIFE * stability / ln(2))) with last_accessed.');
+    expect(r).toBeNull();
+  });
+});

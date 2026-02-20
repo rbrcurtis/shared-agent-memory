@@ -6,6 +6,7 @@ import { StorageService } from './storage.js';
 import { EmbeddingService } from './embeddings.js';
 import { ServerConfig } from './types.js';
 import { computeRetention, OVER_FETCH_MULTIPLIER, TOMBSTONE_THRESHOLD } from './retention.js';
+import { detectSecrets } from './secret-filter.js';
 
 // Socket path (cross-platform)
 const SOCKET_PATH = process.platform === 'win32'
@@ -103,11 +104,19 @@ async function handleRequest(method: string, params: Record<string, unknown>): P
 
   switch (method) {
     case 'store_memory': {
+      const text = params.text as string;
+      const title = (params.title as string) || '';
+      const detection = detectSecrets(text) || detectSecrets(title);
+      if (detection) {
+        throw new Error(
+          `Memory rejected: detected what appears to be a secret (${detection.rule} at position ${detection.position}). Context: ${detection.snippet}. Please redact sensitive values before storing.`
+        );
+      }
       const storage = await getStorage(params);
-      const vector = await embeddings.generateEmbedding(params.text as string);
+      const vector = await embeddings.generateEmbedding(text);
       const id = await storage.store({
-        text: params.text as string,
-        title: (params.title as string) || '',
+        text,
+        title,
         vector,
         agent: (params.agent as string) || 'unknown',
         project: (params.project as string) || 'default',
@@ -190,13 +199,20 @@ async function handleRequest(method: string, params: Record<string, unknown>): P
     }
 
     case 'update_memory': {
-      const storage = await getStorage(params);
       const id = params.id as string;
       const text = params.text as string;
+      const title = (params.title as string) || '';
+      const detection = detectSecrets(text) || detectSecrets(title);
+      if (detection) {
+        throw new Error(
+          `Memory rejected: detected what appears to be a secret (${detection.rule} at position ${detection.position}). Context: ${detection.snippet}. Please redact sensitive values before storing.`
+        );
+      }
+      const storage = await getStorage(params);
       const vector = await embeddings.generateEmbedding(text);
       await storage.update(id, {
         text,
-        title: (params.title as string) || '',
+        title,
         vector,
         agent: 'unknown',
         project: (params.project as string) || 'default',
