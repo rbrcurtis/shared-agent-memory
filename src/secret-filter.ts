@@ -28,7 +28,6 @@ const KEYWORD_PATTERNS = [
 
 const PROXIMITY = 50;
 const MIN_ENTROPY = 3.2;
-const MIN_LENGTH = 9;
 
 const PREFIX_RULES: Array<{ id: string; pattern: RegExp }> = [
   { id: 'github-pat', pattern: /ghp_[a-zA-Z0-9]{36,}/ },
