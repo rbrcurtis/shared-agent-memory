@@ -280,20 +280,18 @@ async function main(): Promise<void> {
     fs.unlinkSync(SOCKET_PATH);
   }
 
-  // Initialize embedding service (singleton, keeps model in memory)
+  // Initialize embedding service before accepting connections
   embeddings = EmbeddingService.getInstance();
+  log('Loading embedding model...');
+  await embeddings.initialize();
+  modelReady = true;
+  log('Embedding model ready');
 
-  // Create server
+  // Only start listening after model is ready
   server = net.createServer(handleConnection);
   server.listen(SOCKET_PATH, () => {
     log(`Daemon ready on ${SOCKET_PATH}`);
   });
-
-  // Pre-warm embedding model
-  log('Pre-warming embedding model...');
-  await embeddings.initialize();
-  modelReady = true;
-  log('Embedding model ready');
 
   // Idle timeout checker
   setInterval(() => {
