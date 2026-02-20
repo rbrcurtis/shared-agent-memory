@@ -109,3 +109,43 @@ describe('detectSecrets -- Layer 1: known prefixes', () => {
     expect(r).toBeNull();
   });
 });
+
+describe('detectSecrets -- Layer 2: long high-entropy strings', () => {
+  it('detects long base64 string (>16 chars)', () => {
+    const r = detectSecrets('the key is wzomliRqoAu7jpJZfzBqdzHX9VQPNowdAOdvxDIOxXk=');
+    expect(r).not.toBeNull();
+    expect(r!.rule).toBe('high-entropy-base64');
+  });
+
+  it('detects long hex string (>32 chars)', () => {
+    const r = detectSecrets('hash: 6e5d4ed279ad196540f2f0b322642be5abcdef01');
+    expect(r).not.toBeNull();
+    expect(r!.rule).toBe('high-entropy-hex');
+  });
+
+  it('does not flag short git SHA (7 chars)', () => {
+    const r = detectSecrets('fixed in commit a3f2b91');
+    expect(r).toBeNull();
+  });
+
+  it('does not flag short base64 (<=16 chars)', () => {
+    const r = detectSecrets('the id is abc123def456==');
+    expect(r).toBeNull();
+  });
+
+  it('does not flag low-entropy long string', () => {
+    const r = detectSecrets('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+    expect(r).toBeNull();
+  });
+
+  it('does not flag common English words that happen to be long', () => {
+    const r = detectSecrets('The authentication system uses role-based access control for authorization.');
+    expect(r).toBeNull();
+  });
+
+  it('detects base64 with plus and slash chars', () => {
+    const r = detectSecrets('secret: 9l/vD27d9W20zA0If1/k798wx4dGOrHU7oBHhNdaWlA=');
+    expect(r).not.toBeNull();
+    expect(r!.rule).toBe('high-entropy-base64');
+  });
+});

@@ -65,5 +65,33 @@ export function detectSecrets(text: string): SecretDetection | null {
       };
     }
   }
+
+  // Layer 2: long high-entropy strings
+  let m: RegExpExecArray | null;
+
+  // Hex: 33+ contiguous hex chars (checked before base64 since hex is a subset of base64 charset)
+  const hexRe = /[a-fA-F0-9]{33,}/g;
+  while ((m = hexRe.exec(text)) !== null) {
+    if (shannonEntropy(m[0]) > 3.0) {
+      return {
+        rule: 'high-entropy-hex',
+        position: m.index,
+        snippet: maskSnippet(text, m.index, m[0].length),
+      };
+    }
+  }
+
+  // Base64: 17+ chars of [A-Za-z0-9+/] with optional = padding
+  const base64Re = /[A-Za-z0-9+/]{17,}={0,2}/g;
+  while ((m = base64Re.exec(text)) !== null) {
+    if (shannonEntropy(m[0]) > 3.0) {
+      return {
+        rule: 'high-entropy-base64',
+        position: m.index,
+        snippet: maskSnippet(text, m.index, m[0].length),
+      };
+    }
+  }
+
   return null;
 }
