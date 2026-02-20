@@ -18,9 +18,11 @@ export function shannonEntropy(s: string): number {
   return entropy;
 }
 
+// Standalone 'key' and 'auth' removed — too many FPs from prose ("Key files", "auth architecture").
+// Compound forms (api_key, api-key, access_key, private_key) still catch real credential patterns.
 const KEYWORD_PATTERNS = [
-  'key', 'token', 'password', 'passwd', 'secret', 'credential',
-  'auth', 'bearer', 'api_key', 'apikey', 'api-key', 'access_key',
+  'token', 'password', 'passwd', 'secret', 'credential',
+  'bearer', 'api_key', 'apikey', 'api-key', 'access_key',
   'private_key', 'kubeconfig',
 ].map(kw => new RegExp(`\\b${kw}\\b`, 'i'));
 
@@ -55,18 +57,34 @@ const PREFIX_RULES: Array<{ id: string; pattern: RegExp }> = [
   { id: 'telegram-bot-token', pattern: /[0-9]{8,10}:[a-zA-Z0-9_-]{35}/ },
 ];
 
-// Skip base64 matches that look like code identifiers or file paths
+// Skip matches that look like code identifiers, file paths, or compound names.
+// Real secrets have balanced character distribution (~40-50% lowercase).
+// Code identifiers are predominantly lowercase (>70%) with camelCase transitions.
 function looksLikeCode(s: string): boolean {
   let lowerCount = 0;
-  for (const c of s) {
-    if (c >= 'a' && c <= 'z') lowerCount++;
+  let transitions = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c >= 'a' && c <= 'z') {
+      lowerCount++;
+      if (i + 1 < s.length && s[i + 1] >= 'A' && s[i + 1] <= 'Z') transitions++;
+    }
   }
   const lowerPct = lowerCount / s.length;
-  // camelCase/PascalCase: 5+ lowercase then uppercase, AND predominantly lowercase (>75%)
-  // Real secrets have more balanced character distribution (~40-50% lowercase)
+  // Multi-segment camelCase: 2+ lowercase→uppercase transitions (e.g., getUserPermissions)
+  if (transitions >= 2 && lowerPct > 0.7) return true;
+  // Single-segment camelCase with high lowercase (e.g., AIAgentConfiguration)
+  if (transitions >= 1 && lowerPct > 0.75) return true;
+  // Long lowercase run then uppercase (original check, e.g., handlerCallback)
   if (/[a-z]{5,}[A-Z]/.test(s) && lowerPct > 0.75) return true;
-  // File path: slash followed by 3+ lowercase (real path segment, not random base64 like /v)
+  // File path: slash followed by 3+ lowercase
   if (/\/[a-z]{3,}/.test(s)) return true;
+  // Kebab-case: alphabetic segments joined by dashes (e.g., graphql-yoga)
+  if (/[a-zA-Z]{3,}-[a-zA-Z]{3,}/.test(s)) return true;
+  // Slash or plus separated words: word/word or word+word (e.g., Cancelled/Broken)
+  if (/[a-zA-Z]{3,}[/+][a-zA-Z]{3,}/.test(s)) return true;
+  // MongoDB ObjectID: exactly 24 hex characters
+  if (s.length === 24 && /^[a-fA-F0-9]{24}$/.test(s)) return true;
   return false;
 }
 
@@ -124,6 +142,7 @@ export function detectSecrets(text: string): SecretDetection | null {
   const candidateRe = /[a-zA-Z0-9_+/=-]{9,}/g;
   while ((m = candidateRe.exec(text)) !== null) {
     if (shannonEntropy(m[0]) < MIN_ENTROPY) continue;
+    if (looksLikeCode(m[0])) continue;
     const windowStart = Math.max(0, m.index - PROXIMITY);
     const windowEnd = Math.min(text.length, m.index + m[0].length + PROXIMITY);
     const window = text.slice(windowStart, windowEnd);
