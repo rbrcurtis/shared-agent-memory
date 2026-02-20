@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memory-browser
+  namespace: qdrant
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: memory-browser
+  template:
+    metadata:
+      labels:
+        app: memory-browser
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+              name: http
+          volumeMounts:
+            - name: config
+              mountPath: /usr/share/nginx/html/config.json
+              subPath: config.json
+            - name: app
+              mountPath: /usr/share/nginx/html/index.html
+              subPath: index.html
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "10m"
+            limits:
+              memory: "64Mi"
+              cpu: "50m"
+      volumes:
+        - name: config
+          configMap:
+            name: memory-browser
+            items:
+              - key: config.json
+                path: config.json
+        - name: app
+          configMap:
+            name: memory-browser-app
+            items:
+              - key: index.html
+                path: index.html
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: memory-browser
+  namespace: qdrant
+spec:
+  selector:
+    app: memory-browser
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80

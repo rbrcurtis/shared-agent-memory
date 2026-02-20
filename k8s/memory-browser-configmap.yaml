@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: memory-browser
+  namespace: qdrant
+data:
+  config.json: |
+    { "url": "http://qdrant:6333" }
