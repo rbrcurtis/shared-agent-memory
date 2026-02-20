@@ -71,6 +71,10 @@ function looksLikeCode(s: string): boolean {
     }
   }
   const lowerPct = lowerCount / s.length;
+  // No case transitions → single-case word/ID, not a random secret.
+  // Only for extreme skew: >85% lowercase or all-uppercase (preserves Google OAuth hash at 78%).
+  if (transitions === 0 && lowerPct > 0.85) return true;
+  if (transitions === 0 && lowerCount === 0 && /[A-Z]/.test(s)) return true;
   // Multi-segment camelCase: 2+ lowercase→uppercase transitions (e.g., getUserPermissions)
   if (transitions >= 2 && lowerPct > 0.7) return true;
   // Single-segment camelCase with high lowercase (e.g., AIAgentConfiguration)
