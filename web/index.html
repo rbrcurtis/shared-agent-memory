@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Memory Browser</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#fff;--bg2:#f5f5f7;--bg3:#e8e8ed;--fg:#1d1d1f;--fg2:#6e6e73;
+  --accent:#0071e3;--accent2:#0077ed;--red:#ff3b30;--green:#34c759;
+  --yellow:#ff9f0a;--border:#d2d2d7;--card-bg:#fff;--card-shadow:0 1px 3px rgba(0,0,0,.08);
+  --radius:10px;--sidebar-w:260px;
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#1d1d1f;--bg2:#2c2c2e;--bg3:#3a3a3c;--fg:#f5f5f7;--fg2:#98989d;
+    --accent:#0a84ff;--accent2:#409cff;--red:#ff453a;--green:#30d158;
+    --yellow:#ffd60a;--border:#48484a;--card-bg:#2c2c2e;--card-shadow:0 1px 3px rgba(0,0,0,.3);
+  }
+}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--fg);line-height:1.5;min-height:100vh}
+a{color:var(--accent)}
+button{cursor:pointer;font:inherit;border:none;border-radius:6px;padding:6px 14px;background:var(--accent);color:#fff;transition:background .15s}
+button:hover{background:var(--accent2)}
+button.secondary{background:var(--bg3);color:var(--fg)}
+button.secondary:hover{background:var(--border)}
+button.danger{background:var(--red)}
+button.danger:hover{opacity:.85}
+input,select,textarea{font:inherit;border:1px solid var(--border);border-radius:6px;padding:6px 10px;background:var(--bg);color:var(--fg);width:100%}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,113,227,.15)}
+
+/* Connection screen */
+#connect-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+#connect-form{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:32px;max-width:400px;width:100%;box-shadow:var(--card-shadow)}
+#connect-form h1{font-size:24px;margin-bottom:4px}
+#connect-form p{color:var(--fg2);font-size:14px;margin-bottom:20px}
+#connect-form label{display:block;font-size:13px;font-weight:600;margin-bottom:4px;margin-top:14px}
+#connect-form .error{color:var(--red);font-size:13px;margin-top:12px}
+#connect-form button{margin-top:20px;width:100%;padding:10px}
+
+/* Main layout */
+#app{display:none;height:100vh;grid-template-rows:auto 1fr;grid-template-columns:var(--sidebar-w) 1fr}
+#app.active{display:grid}
+header{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid var(--border);background:var(--bg2)}
+header h1{font-size:18px;flex-shrink:0}
+header .instance{color:var(--fg2);font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+header button{font-size:13px;padding:5px 12px}
+
+/* Sidebar */
+#sidebar{border-right:1px solid var(--border);padding:14px;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+#sidebar label{display:block;font-size:12px;font-weight:600;color:var(--fg2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
+#sidebar input,#sidebar select{font-size:13px;padding:7px 8px}
+#sidebar .checkbox-row{display:flex;align-items:center;gap:6px;font-size:13px}
+#sidebar .checkbox-row input{width:auto}
+
+/* Memory list */
+#main{overflow-y:auto;padding:16px}
+#memory-list{display:flex;flex-direction:column;gap:10px;max-width:900px}
+.memory-card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--card-shadow)}
+.memory-card.tombstoned{opacity:.5;border-style:dashed}
+.card-header{display:flex;align-items:flex-start;gap:8px}
+.card-title{flex:1;font-weight:600;font-size:15px}
+.card-actions{display:flex;gap:4px;flex-shrink:0}
+.card-actions button{font-size:12px;padding:3px 8px}
+.card-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px;font-size:12px;color:var(--fg2)}
+.badge{display:inline-block;padding:1px 7px;border-radius:4px;font-size:11px;font-weight:500}
+.badge.project{background:#e8f0fe;color:#1a73e8}
+.badge.agent{background:#fce8e6;color:#d93025}
+.badge.tag{background:var(--bg3);color:var(--fg2)}
+@media(prefers-color-scheme:dark){
+  .badge.project{background:#1a3a5c;color:#8ab4f8}
+  .badge.agent{background:#5c1a1a;color:#f28b82}
+}
+.retention-bar{display:flex;align-items:center;gap:6px;margin-top:8px}
+.retention-track{flex:1;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;max-width:120px}
+.retention-fill{height:100%;border-radius:3px;transition:width .3s}
+.retention-label{font-size:11px;color:var(--fg2)}
+.card-text{margin-top:10px;font-size:13px;white-space:pre-wrap;word-break:break-word;color:var(--fg2);max-height:300px;overflow-y:auto;border-top:1px solid var(--border);padding-top:10px}
+.card-expand{margin-top:8px;font-size:12px;color:var(--accent);cursor:pointer;background:none;padding:0}
+.card-expand:hover{background:none;text-decoration:underline}
+
+#load-more-row{text-align:center;padding:16px 0}
+#load-more-row button{font-size:13px}
+#empty-msg{text-align:center;color:var(--fg2);padding:40px 0}
+
+/* Stats panel */
+#stats-panel{display:none;grid-column:1/-1;border-top:1px solid var(--border);padding:16px 20px;background:var(--bg2);overflow-y:auto;max-height:300px}
+#stats-panel.active{display:block}
+#stats-panel h3{font-size:14px;margin-bottom:10px}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
+.stat-section{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:12px}
+.stat-section h4{font-size:13px;color:var(--fg2);margin-bottom:8px}
+.stat-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:12px}
+.stat-bar-label{width:100px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stat-bar-track{flex:1;height:8px;background:var(--bg3);border-radius:4px;overflow:hidden}
+.stat-bar-fill{height:100%;background:var(--accent);border-radius:4px}
+.stat-bar-count{width:40px;font-size:11px;color:var(--fg2)}
+.stat-number{font-size:28px;font-weight:700;color:var(--accent)}
+
+/* Edit dialog */
+dialog{border:none;border-radius:var(--radius);padding:0;background:var(--card-bg);color:var(--fg);box-shadow:0 8px 32px rgba(0,0,0,.2);max-width:560px;width:90vw}
+dialog::backdrop{background:rgba(0,0,0,.4)}
+dialog form{padding:24px}
+dialog h2{font-size:18px;margin-bottom:16px}
+dialog label{display:block;font-size:13px;font-weight:600;margin-bottom:4px;margin-top:12px}
+dialog textarea{resize:vertical;min-height:120px}
+dialog .btn-row{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+
+/* Responsive */
+@media(max-width:700px){
+  #app.active{grid-template-columns:1fr}
+  #sidebar{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- Connection Screen -->
+<div id="connect-screen">
+  <div id="connect-form">
+    <h1>Memory Browser</h1>
+    <p>Connect to a Qdrant instance to browse memories.</p>
+    <label for="cf-url">Qdrant URL</label>
+    <input id="cf-url" type="url" value="http://localhost:6333" placeholder="http://localhost:6333">
+    <label for="cf-key">API Key</label>
+    <input id="cf-key" type="password" placeholder="Enter API key">
+    <div id="cf-error" class="error" hidden></div>
+    <button id="cf-connect" type="button">Connect</button>
+  </div>
+</div>
+
+<!-- Main App -->
+<div id="app">
+  <header>
+    <h1>Memory Browser</h1>
+    <span class="instance" id="hdr-instance"></span>
+    <button class="secondary" id="btn-stats">Stats</button>
+    <button class="secondary" id="btn-disconnect">Disconnect</button>
+  </header>
+
+  <div id="sidebar">
+    <div>
+      <label for="search-input">Search</label>
+      <input id="search-input" type="search" placeholder="BM25 keyword search...">
+    </div>
+    <div>
+      <label for="filter-project">Project</label>
+      <select id="filter-project"><option value="">All projects</option></select>
+    </div>
+    <div>
+      <label for="filter-agent">Agent</label>
+      <select id="filter-agent"><option value="">All agents</option></select>
+    </div>
+    <div class="checkbox-row">
+      <input type="checkbox" id="filter-tombstoned">
+      <label for="filter-tombstoned" style="text-transform:none;color:var(--fg);font-weight:normal;letter-spacing:0">Include tombstoned</label>
+    </div>
+  </div>
+
+  <div id="main">
+    <div id="memory-list"></div>
+    <div id="empty-msg" hidden>No memories found.</div>
+    <div id="load-more-row" hidden><button id="btn-load-more" class="secondary">Load more</button></div>
+  </div>
+
+  <div id="stats-panel">
+    <h3>Collection Statistics</h3>
+    <div id="stats-content" class="stats-grid"></div>
+  </div>
+</div>
+
+<!-- Edit Dialog -->
+<dialog id="edit-dialog">
+  <form method="dialog">
+    <h2>Edit Memory</h2>
+    <label for="ed-title">Title</label>
+    <input id="ed-title" type="text">
+    <label for="ed-tags">Tags (comma-separated)</label>
+    <input id="ed-tags" type="text" placeholder="tag1, tag2">
+    <label for="ed-text">Text</label>
+    <textarea id="ed-text"></textarea>
+    <div class="btn-row">
+      <button type="button" class="secondary" id="ed-cancel">Cancel</button>
+      <button type="button" id="ed-save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(function() {
+'use strict';
+
+const BASE_HALF_LIFE = 30;
+const COLLECTION = 'shared_agent_memory';
+const PAGE_SIZE = 20;
+
+let qdrantUrl = '';
+let apiKey = '';
+let nextOffset = null;
+let currentPoints = [];
+let allProjects = new Set();
+let allAgents = new Set();
+let editingId = null;
+
+// --- Retention ---
+function computeRetention(point) {
+  const p = point.payload || point;
+  const ref = p.last_accessed || p.created_at;
+  if (!ref) return 1;
+  const days = (Date.now() - new Date(ref).getTime()) / 86400000;
+  const stability = p.stability || 1.0;
+  const lambda = (BASE_HALF_LIFE * stability) / Math.LN2;
+  return Math.exp(-days / lambda);
+}
+
+// --- API helpers ---
+async function api(method, path, body) {
+  const opts = { method, headers: { 'api-key': apiKey, 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(qdrantUrl + path, opts);
+  if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+  return r.json();
+}
+
+async function testConnection() {
+  return api('GET', '/collections');
+}
+
+async function scrollPoints(offset, filter) {
+  const body = { limit: PAGE_SIZE, with_payload: true, filter: filter };
+  if (offset) body.offset = offset;
+  return api('POST', '/collections/' + COLLECTION + '/points/scroll', body);
+}
+
+async function searchPoints(query, filter) {
+  return api('POST', '/collections/' + COLLECTION + '/points/query', {
+    prefetch: [{ query: { text: query, model: 'Qdrant/bm25' }, using: 'text-bm25', limit: 50, filter: filter }],
+    query: { fusion: 'rrf' },
+    limit: PAGE_SIZE,
+    with_payload: true
+  });
+}
+
+async function updatePayload(id, payload) {
+  return api('POST', '/collections/' + COLLECTION + '/points/payload', { payload: payload, points: [id] });
+}
+
+// --- Filter building ---
+function buildFilter() {
+  const must = [];
+  const proj = $('filter-project').value;
+  const agent = $('filter-agent').value;
+  const tombstoned = $('filter-tombstoned').checked;
+
+  if (proj) must.push({ key: 'project', match: { value: proj } });
+  if (agent) must.push({ key: 'agent', match: { value: agent } });
+  if (!tombstoned) must.push({ is_empty: { key: 'tombstoned_at' } });
+
+  return must.length ? { must: must } : undefined;
+}
+
+// --- DOM helpers ---
+function $(id) { return document.getElementById(id); }
+
+function clearChildren(node) {
+  while (node.firstChild) node.removeChild(node.firstChild);
+}
+
+function el(tag, attrs) {
+  var e = document.createElement(tag);
+  if (attrs) {
+    for (var k in attrs) {
+      if (!attrs.hasOwnProperty(k)) continue;
+      var v = attrs[k];
+      if (k === 'class') e.className = v;
+      else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+      else if (k === 'style') e.style.cssText = v;
+      else e.setAttribute(k, v);
+    }
+  }
+  for (var i = 2; i < arguments.length; i++) {
+    var c = arguments[i];
+    if (typeof c === 'string') e.appendChild(document.createTextNode(c));
+    else if (c) e.appendChild(c);
+  }
+  return e;
+}
+
+function relativeTime(iso) {
+  if (!iso) return '';
+  var diff = Date.now() - new Date(iso).getTime();
+  var mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  var hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  var days = Math.floor(hrs / 24);
+  if (days < 30) return days + 'd ago';
+  var months = Math.floor(days / 30);
+  return months + 'mo ago';
+}
+
+// --- Rendering ---
+function renderCard(point) {
+  var p = point.payload;
+  var isTombstoned = !!p.tombstoned_at;
+  var ret = computeRetention(point);
+  var retPct = Math.round(ret * 100);
+  var retColor = retPct > 60 ? 'var(--green)' : retPct > 30 ? 'var(--yellow)' : 'var(--red)';
+
+  var card = el('div', { class: 'memory-card' + (isTombstoned ? ' tombstoned' : '') });
+
+  // Header
+  var hdr = el('div', { class: 'card-header' });
+  hdr.appendChild(el('span', { class: 'card-title' }, p.title || '(untitled)'));
+  var actions = el('div', { class: 'card-actions' });
+  if (!isTombstoned) {
+    actions.appendChild(el('button', { class: 'secondary', onclick: function() { openEdit(point); } }, 'Edit'));
+    actions.appendChild(el('button', { class: 'danger', onclick: function() { deleteMemory(point.id); } }, 'Del'));
+  }
+  hdr.appendChild(actions);
+  card.appendChild(hdr);
+
+  // Meta
+  var meta = el('div', { class: 'card-meta' });
+  if (p.project) meta.appendChild(el('span', { class: 'badge project' }, p.project));
+  if (p.agent) meta.appendChild(el('span', { class: 'badge agent' }, p.agent));
+  if (p.tags && p.tags.length) {
+    for (var i = 0; i < p.tags.length; i++) meta.appendChild(el('span', { class: 'badge tag' }, p.tags[i]));
+  }
+  meta.appendChild(el('span', null, relativeTime(p.last_accessed || p.created_at)));
+  card.appendChild(meta);
+
+  // Retention bar
+  var retBar = el('div', { class: 'retention-bar' });
+  var track = el('div', { class: 'retention-track' });
+  var fill = el('div', { class: 'retention-fill' });
+  fill.style.width = retPct + '%';
+  fill.style.background = retColor;
+  track.appendChild(fill);
+  retBar.appendChild(track);
+  retBar.appendChild(el('span', { class: 'retention-label' }, retPct + '%'));
+  card.appendChild(retBar);
+
+  // Expandable text
+  if (p.text) {
+    var expandBtn = el('button', { class: 'card-expand' }, 'Show text');
+    var expanded = false;
+    var textEl = null;
+    expandBtn.addEventListener('click', function() {
+      expanded = !expanded;
+      if (expanded) {
+        textEl = el('div', { class: 'card-text' }, p.text);
+        card.appendChild(textEl);
+        expandBtn.textContent = 'Hide text';
+      } else {
+        if (textEl) card.removeChild(textEl);
+        textEl = null;
+        expandBtn.textContent = 'Show text';
+      }
+    });
+    card.appendChild(expandBtn);
+  }
+
+  return card;
+}
+
+function renderList(points) {
+  var list = $('memory-list');
+  clearChildren(list);
+  for (var i = 0; i < points.length; i++) list.appendChild(renderCard(points[i]));
+  $('empty-msg').hidden = points.length > 0;
+}
+
+// --- Data loading ---
+var searchTimer = null;
+var isLoading = false;
+
+async function loadData(append) {
+  if (isLoading) return;
+  isLoading = true;
+  try {
+    var query = $('search-input').value.trim();
+    var filter = buildFilter();
+
+    if (query) {
+      var res = await searchPoints(query, filter);
+      var points = res.result.points || res.result || [];
+      if (!append) currentPoints = points;
+      else currentPoints = currentPoints.concat(points);
+      renderList(currentPoints);
+      nextOffset = null;
+      $('load-more-row').hidden = true;
+    } else {
+      var res = await scrollPoints(append ? nextOffset : null, filter);
+      var points = res.result.points || [];
+      if (!append) currentPoints = points;
+      else currentPoints = currentPoints.concat(points);
+      renderList(currentPoints);
+      nextOffset = res.result.next_page_offset || null;
+      $('load-more-row').hidden = !nextOffset;
+
+      for (var i = 0; i < points.length; i++) {
+        if (points[i].payload.project) allProjects.add(points[i].payload.project);
+        if (points[i].payload.agent) allAgents.add(points[i].payload.agent);
+      }
+      populateFilters();
+    }
+  } catch (e) {
+    console.error('Load error:', e);
+  }
+  isLoading = false;
+}
+
+function populateFilters() {
+  populateSelect('filter-project', allProjects, 'All projects');
+  populateSelect('filter-agent', allAgents, 'All agents');
+}
+
+function populateSelect(id, values, defaultLabel) {
+  var sel = $(id);
+  var cur = sel.value;
+  var sorted = Array.from(values).sort(function(a, b) { return a.localeCompare(b, undefined, { sensitivity: 'base' }); });
+  clearChildren(sel);
+  sel.appendChild(el('option', { value: '' }, defaultLabel));
+  for (var i = 0; i < sorted.length; i++) sel.appendChild(el('option', { value: sorted[i] }, sorted[i]));
+  sel.value = cur;
+}
+
+// --- Preload all filter values ---
+async function preloadFilters() {
+  var offset = null;
+  do {
+    var body = { limit: 100, with_payload: true };
+    if (offset) body.offset = offset;
+    var res = await api('POST', '/collections/' + COLLECTION + '/points/scroll', body);
+    var pts = res.result.points || [];
+    for (var i = 0; i < pts.length; i++) {
+      if (pts[i].payload.project) allProjects.add(pts[i].payload.project);
+      if (pts[i].payload.agent) allAgents.add(pts[i].payload.agent);
+    }
+    offset = res.result.next_page_offset || null;
+  } while (offset);
+  populateFilters();
+}
+
+// --- Edit ---
+function openEdit(point) {
+  editingId = point.id;
+  $('ed-title').value = point.payload.title || '';
+  $('ed-tags').value = (point.payload.tags || []).join(', ');
+  $('ed-text').value = point.payload.text || '';
+  $('edit-dialog').showModal();
+}
+
+async function saveEdit() {
+  if (!editingId) return;
+  var title = $('ed-title').value.trim();
+  var tags = $('ed-tags').value.split(',').map(function(t) { return t.trim(); }).filter(Boolean);
+  var text = $('ed-text').value;
+  try {
+    await updatePayload(editingId, { title: title, tags: tags, text: text });
+    $('edit-dialog').close();
+    var pt = currentPoints.find(function(p) { return p.id === editingId; });
+    if (pt) {
+      pt.payload.title = title;
+      pt.payload.tags = tags;
+      pt.payload.text = text;
+      renderList(currentPoints);
+    }
+    editingId = null;
+  } catch (e) {
+    alert('Save failed: ' + e.message);
+  }
+}
+
+async function deleteMemory(id) {
+  if (!confirm('Tombstone this memory?')) return;
+  try {
+    await updatePayload(id, { tombstoned_at: new Date().toISOString() });
+    currentPoints = currentPoints.filter(function(p) { return p.id !== id; });
+    renderList(currentPoints);
+  } catch (e) {
+    alert('Delete failed: ' + e.message);
+  }
+}
+
+// --- Stats ---
+var statsLoaded = false;
+
+async function loadStats() {
+  if (statsLoaded) return;
+  var container = $('stats-content');
+  clearChildren(container);
+  container.appendChild(el('p', { style: 'color:var(--fg2)' }, 'Loading stats...'));
+
+  var allPts = [];
+  var offset = null;
+  do {
+    var body = { limit: 100, with_payload: true };
+    if (offset) body.offset = offset;
+    var res = await api('POST', '/collections/' + COLLECTION + '/points/scroll', body);
+    allPts = allPts.concat(res.result.points || []);
+    offset = res.result.next_page_offset || null;
+  } while (offset);
+
+  var total = allPts.length;
+  var tombstoned = allPts.filter(function(p) { return p.payload.tombstoned_at; }).length;
+  var live = total - tombstoned;
+
+  var byProject = {};
+  var byAgent = {};
+  var tagCounts = {};
+  var retBuckets = [0, 0, 0]; // <30, 30-60, >60
+  for (var i = 0; i < allPts.length; i++) {
+    var pt = allPts[i];
+    if (pt.payload.tombstoned_at) continue;
+    var proj = pt.payload.project || '(none)';
+    byProject[proj] = (byProject[proj] || 0) + 1;
+    var ag = pt.payload.agent || '(none)';
+    byAgent[ag] = (byAgent[ag] || 0) + 1;
+    var tags = pt.payload.tags || [];
+    for (var j = 0; j < tags.length; j++) tagCounts[tags[j]] = (tagCounts[tags[j]] || 0) + 1;
+    var ret = computeRetention(pt) * 100;
+    if (ret > 60) retBuckets[2]++;
+    else if (ret > 30) retBuckets[1]++;
+    else retBuckets[0]++;
+  }
+
+  clearChildren(container);
+
+  // Overview
+  var totals = el('div', { class: 'stat-section' });
+  totals.appendChild(el('h4', null, 'Overview'));
+  totals.appendChild(el('div', { style: 'display:flex;gap:24px' },
+    el('div', null, el('div', { class: 'stat-number' }, String(live)), el('div', { style: 'font-size:12px;color:var(--fg2)' }, 'Live')),
+    el('div', null, el('div', { class: 'stat-number' }, String(tombstoned)), el('div', { style: 'font-size:12px;color:var(--fg2)' }, 'Tombstoned')),
+    el('div', null, el('div', { class: 'stat-number' }, String(total)), el('div', { style: 'font-size:12px;color:var(--fg2)' }, 'Total'))
+  ));
+  container.appendChild(totals);
+
+  // By project
+  container.appendChild(statBars('By Project', byProject, live));
+  container.appendChild(statBars('By Agent', byAgent, live));
+
+  // Retention distribution
+  var retSec = el('div', { class: 'stat-section' });
+  retSec.appendChild(el('h4', null, 'Retention Distribution'));
+  var retLabels = ['Low (<30%)', 'Medium (30-60%)', 'High (>60%)'];
+  var retColors = ['var(--red)', 'var(--yellow)', 'var(--green)'];
+  for (var i = 0; i < 3; i++) {
+    var pct = live ? Math.round(retBuckets[i] / live * 100) : 0;
+    var row = el('div', { class: 'stat-bar-row' });
+    row.appendChild(el('span', { class: 'stat-bar-label' }, retLabels[i]));
+    var track = el('div', { class: 'stat-bar-track' });
+    var fill = el('div', { class: 'stat-bar-fill' });
+    fill.style.width = pct + '%';
+    fill.style.background = retColors[i];
+    track.appendChild(fill);
+    row.appendChild(track);
+    row.appendChild(el('span', { class: 'stat-bar-count' }, String(retBuckets[i])));
+    retSec.appendChild(row);
+  }
+  container.appendChild(retSec);
+
+  // Top tags
+  var topTags = Object.entries(tagCounts).sort(function(a, b) { return b[1] - a[1]; }).slice(0, 15);
+  if (topTags.length) {
+    var max = topTags[0][1];
+    var tagSec = el('div', { class: 'stat-section' });
+    tagSec.appendChild(el('h4', null, 'Top Tags'));
+    for (var i = 0; i < topTags.length; i++) {
+      var row = el('div', { class: 'stat-bar-row' });
+      row.appendChild(el('span', { class: 'stat-bar-label' }, topTags[i][0]));
+      var track = el('div', { class: 'stat-bar-track' });
+      var fill = el('div', { class: 'stat-bar-fill' });
+      fill.style.width = Math.round(topTags[i][1] / max * 100) + '%';
+      track.appendChild(fill);
+      row.appendChild(track);
+      row.appendChild(el('span', { class: 'stat-bar-count' }, String(topTags[i][1])));
+      tagSec.appendChild(row);
+    }
+    container.appendChild(tagSec);
+  }
+
+  statsLoaded = true;
+}
+
+function statBars(title, data, total) {
+  var sec = el('div', { class: 'stat-section' });
+  sec.appendChild(el('h4', null, title));
+  var sorted = Object.entries(data).sort(function(a, b) { return b[1] - a[1]; });
+  for (var i = 0; i < sorted.length; i++) {
+    var pct = total ? Math.round(sorted[i][1] / total * 100) : 0;
+    var row = el('div', { class: 'stat-bar-row' });
+    row.appendChild(el('span', { class: 'stat-bar-label' }, sorted[i][0]));
+    var track = el('div', { class: 'stat-bar-track' });
+    var fill = el('div', { class: 'stat-bar-fill' });
+    fill.style.width = pct + '%';
+    track.appendChild(fill);
+    row.appendChild(track);
+    row.appendChild(el('span', { class: 'stat-bar-count' }, String(sorted[i][1])));
+    sec.appendChild(row);
+  }
+  return sec;
+}
+
+// --- Connection ---
+async function connect(url, key) {
+  qdrantUrl = url.replace(/\/+$/, '');
+  apiKey = key;
+  await testConnection();
+  sessionStorage.setItem('qdrant_url', qdrantUrl);
+  sessionStorage.setItem('qdrant_key', apiKey);
+  showApp();
+}
+
+function showApp() {
+  $('connect-screen').style.display = 'none';
+  $('app').classList.add('active');
+  $('hdr-instance').textContent = qdrantUrl;
+  loadData(false);
+  preloadFilters();
+}
+
+function disconnect() {
+  sessionStorage.removeItem('qdrant_url');
+  sessionStorage.removeItem('qdrant_key');
+  qdrantUrl = '';
+  apiKey = '';
+  currentPoints = [];
+  allProjects.clear();
+  allAgents.clear();
+  nextOffset = null;
+  statsLoaded = false;
+  $('app').classList.remove('active');
+  $('connect-screen').style.display = 'flex';
+  $('stats-panel').classList.remove('active');
+  clearChildren($('memory-list'));
+}
+
+// --- Init ---
+async function init() {
+  var params = new URLSearchParams(location.search);
+
+  // Config waterfall: query params > sessionStorage > config.json > form
+  var url = params.get('url') || sessionStorage.getItem('qdrant_url') || '';
+  var key = params.get('key') || sessionStorage.getItem('qdrant_key') || '';
+
+  // Try config.json for URL pre-fill
+  var configUrl = '';
+  try {
+    var cfg = await fetch('./config.json').then(function(r) { return r.ok ? r.json() : null; });
+    if (cfg && cfg.url) configUrl = cfg.url;
+  } catch(e) {}
+
+  if (!url && configUrl) url = configUrl;
+  if (!url) url = 'http://localhost:6333';
+
+  $('cf-url').value = url;
+
+  if (url && key) {
+    try {
+      await connect(url, key);
+      return;
+    } catch(e) {
+      // Fall through to form
+    }
+  }
+
+  // Show connect form
+  $('connect-screen').style.display = 'flex';
+}
+
+// --- Event wiring ---
+$('cf-connect').addEventListener('click', async function() {
+  var url = $('cf-url').value.trim();
+  var key = $('cf-key').value.trim();
+  if (!url || !key) {
+    $('cf-error').textContent = 'URL and API key are required.';
+    $('cf-error').hidden = false;
+    return;
+  }
+  $('cf-connect').disabled = true;
+  $('cf-connect').textContent = 'Connecting...';
+  $('cf-error').hidden = true;
+  try {
+    await connect(url, key);
+  } catch (e) {
+    $('cf-error').textContent = 'Connection failed: ' + e.message;
+    $('cf-error').hidden = false;
+  }
+  $('cf-connect').disabled = false;
+  $('cf-connect').textContent = 'Connect';
+});
+
+$('btn-disconnect').addEventListener('click', disconnect);
+
+$('search-input').addEventListener('input', function() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(function() { loadData(false); }, 300);
+});
+
+$('filter-project').addEventListener('change', function() { loadData(false); });
+$('filter-agent').addEventListener('change', function() { loadData(false); });
+$('filter-tombstoned').addEventListener('change', function() { loadData(false); });
+
+$('btn-load-more').addEventListener('click', function() { loadData(true); });
+
+$('btn-stats').addEventListener('click', function() {
+  var panel = $('stats-panel');
+  panel.classList.toggle('active');
+  if (panel.classList.contains('active')) loadStats();
+});
+
+$('ed-cancel').addEventListener('click', function() { $('edit-dialog').close(); });
+$('ed-save').addEventListener('click', saveEdit);
+
+$('cf-key').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') $('cf-connect').click();
+});
+$('cf-url').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') $('cf-key').focus();
+});
+
+init();
+})();
+</script>
+</body>
+</html>
