@@ -73,6 +73,10 @@ Memories use a title + body model for context efficiency:
 
 This keeps search results compact and only reinforces memories you actually use.
 
+## Search Memory When Blocked
+
+**If you hit a roadblock — auth failures, connection errors, missing credentials, unknown URLs, unfamiliar services — ALWAYS search_memory before giving up.** Memory likely has the answer (credential locations, correct endpoints, workarounds). Never abandon a task without checking memory first.
+
 ## Storing Memories
 
 When calling `store_memory`, always provide both `title` and `text`:
