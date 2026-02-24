@@ -106,6 +106,9 @@ async function handleRequest(method: string, params: Record<string, unknown>): P
     case 'store_memory': {
       const text = params.text as string;
       const title = (params.title as string) || '';
+      if (!title) {
+        throw new Error('Memory title is required. Provide a short descriptive title (max 10 words).');
+      }
       const detection = detectSecrets(text) || detectSecrets(title);
       if (detection) {
         throw new Error(
@@ -201,14 +204,24 @@ async function handleRequest(method: string, params: Record<string, unknown>): P
     case 'update_memory': {
       const id = params.id as string;
       const text = params.text as string;
-      const title = (params.title as string) || '';
+      const storage = await getStorage(params);
+
+      // Preserve existing title if not provided
+      let title = params.title as string | undefined;
+      if (!title) {
+        const existing = await storage.getByIds([id]);
+        if (existing.length > 0) {
+          title = existing[0].title;
+        }
+      }
+      title = title || '';
+
       const detection = detectSecrets(text) || detectSecrets(title);
       if (detection) {
         throw new Error(
           `Memory rejected: detected what appears to be a secret (${detection.rule} at position ${detection.position}). Context: ${detection.snippet}. Store secrets in .env files or other files not checked into git, then reference the file path in your memory instead.`
         );
       }
-      const storage = await getStorage(params);
       const vector = await embeddings.generateEmbedding(text);
       await storage.update(id, {
         text,
