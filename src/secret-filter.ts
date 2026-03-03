@@ -20,11 +20,16 @@ export function shannonEntropy(s: string): number {
 
 // Standalone 'key' and 'auth' removed — too many FPs from prose ("Key files", "auth architecture").
 // Compound forms (api_key, api-key, access_key, private_key) still catch real credential patterns.
-const KEYWORD_PATTERNS = [
+// Use letter-only boundaries instead of \b so keywords match inside underscore-separated
+// env vars (e.g. GOG_KEYRING_PASSWORD, AUTH_TOKEN, DB_PASSWORD) where _ is a word char for \b.
+const CREDENTIAL_KEYWORDS = [
   'token', 'password', 'passwd', 'secret', 'credential',
   'bearer', 'api_key', 'apikey', 'api-key', 'access_key',
   'private_key', 'kubeconfig',
-].map(kw => new RegExp(`\\b${kw}\\b`, 'i'));
+];
+const KEYWORD_PATTERNS = CREDENTIAL_KEYWORDS.map(
+  kw => new RegExp(`(?<![a-zA-Z])${kw}(?![a-zA-Z])`, 'i'),
+);
 
 const PROXIMITY = 50;
 const MIN_ENTROPY = 3.2;
@@ -141,7 +146,29 @@ export function detectSecrets(text: string): SecretDetection | null {
     }
   }
 
-  // Layer 3: entropy + keyword proximity (word-boundary matching)
+  // Layer 3: direct credential assignment (KEY=value, KEY: value)
+  // Strong contextual signal from assignment operator — lower thresholds than proximity.
+  const kwAlt = CREDENTIAL_KEYWORDS.join('|');
+  const assignRe = new RegExp(
+    `(?<![a-zA-Z])(?:${kwAlt})(?![a-zA-Z])\\s*[:=]\\s*['"]?([^\\s,;()'"\`]{4,})`,
+    'gi',
+  );
+  let am: RegExpExecArray | null;
+  while ((am = assignRe.exec(text)) !== null) {
+    const val = am[1];
+    // Skip common non-secret descriptors (all-alpha words)
+    if (/^[a-zA-Z]+$/.test(val)) continue;
+    // Skip booleans/nulls
+    if (/^(true|false|null|none|undefined)$/i.test(val)) continue;
+    // Value has digits or special chars — likely a real credential
+    return {
+      rule: 'credential-assignment',
+      position: am.index,
+      snippet: maskSnippet(text, am.index, am[0].length),
+    };
+  }
+
+  // Layer 4: entropy + keyword proximity
   const candidateRe = /[a-zA-Z0-9_+/=-]{9,}/g;
   while ((m = candidateRe.exec(text)) !== null) {
     if (shannonEntropy(m[0]) < MIN_ENTROPY) continue;

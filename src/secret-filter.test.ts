@@ -181,7 +181,6 @@ describe('detectSecrets -- Layer 3: entropy + keyword proximity', () => {
   it('detects secret near "token" keyword', () => {
     const r = detectSecrets('token: dR4kL9mQ2x');
     expect(r).not.toBeNull();
-    expect(r!.rule).toBe('keyword-proximity');
   });
 
   it('detects secret near "password" keyword', () => {
@@ -193,7 +192,6 @@ describe('detectSecrets -- Layer 3: entropy + keyword proximity', () => {
   it('detects secret near "secret" keyword', () => {
     const r = detectSecrets('client secret: mN8pR3kL7x');
     expect(r).not.toBeNull();
-    expect(r!.rule).toBe('keyword-proximity');
   });
 
   it('does not flag low-entropy string near keyword', () => {
@@ -209,7 +207,6 @@ describe('detectSecrets -- Layer 3: entropy + keyword proximity', () => {
   it('detects with underscore keyword variant api_key', () => {
     const r = detectSecrets('api_key=xK9mQ2bR7pL4');
     expect(r).not.toBeNull();
-    expect(r!.rule).toBe('keyword-proximity');
   });
 
   it('detects with bearer keyword', () => {
@@ -221,7 +218,6 @@ describe('detectSecrets -- Layer 3: entropy + keyword proximity', () => {
   it('is case-insensitive on keywords', () => {
     const r = detectSecrets('API_KEY=xK9mQ2bR7pL4');
     expect(r).not.toBeNull();
-    expect(r!.rule).toBe('keyword-proximity');
   });
 
   it('does not match keyword substring inside larger word', () => {
@@ -233,6 +229,79 @@ describe('detectSecrets -- Layer 3: entropy + keyword proximity', () => {
     const r = detectSecrets('kubeconfig contains dR4kL9mQ2x');
     expect(r).not.toBeNull();
     expect(r!.rule).toBe('keyword-proximity');
+  });
+});
+
+describe('detectSecrets -- Layer 3: credential assignment patterns', () => {
+  it('detects PASSWORD: value in underscore-separated env var', () => {
+    const r = detectSecrets('GOG_KEYRING_PASSWORD: tachy0nx');
+    expect(r).not.toBeNull();
+    expect(r!.rule).toBe('credential-assignment');
+  });
+
+  it('detects DB_PASSWORD=value', () => {
+    const r = detectSecrets('DB_PASSWORD=hunt3r2');
+    expect(r).not.toBeNull();
+    expect(r!.rule).toBe('credential-assignment');
+  });
+
+  it('detects AUTH_TOKEN: value', () => {
+    const r = detectSecrets('AUTH_TOKEN: abc123def');
+    expect(r).not.toBeNull();
+    expect(r!.rule).toBe('credential-assignment');
+  });
+
+  it('detects secret: value with special chars', () => {
+    const r = detectSecrets('client secret: xK9m-Q2bR');
+    expect(r).not.toBeNull();
+  });
+
+  it('detects quoted values', () => {
+    const r = detectSecrets("password: 'p4ssw0rd'");
+    expect(r).not.toBeNull();
+    expect(r!.rule).toBe('credential-assignment');
+  });
+
+  it('skips all-alpha descriptors like "required"', () => {
+    const r = detectSecrets('password: required');
+    expect(r).toBeNull();
+  });
+
+  it('skips all-alpha descriptors like "encrypted"', () => {
+    const r = detectSecrets('password: encrypted');
+    expect(r).toBeNull();
+  });
+
+  it('skips all-alpha service names like "Redis"', () => {
+    const r = detectSecrets('password: Redis');
+    expect(r).toBeNull();
+  });
+
+  it('skips boolean literals', () => {
+    const r = detectSecrets('credential: true');
+    expect(r).toBeNull();
+  });
+
+  it('skips descriptive context without assignment operator', () => {
+    const r = detectSecrets('The password must contain at least 8 characters.');
+    expect(r).toBeNull();
+  });
+});
+
+describe('detectSecrets -- keyword boundary fix (underscore-separated env vars)', () => {
+  it('matches PASSWORD in GOG_KEYRING_PASSWORD via proximity', () => {
+    const r = detectSecrets('GOG_KEYRING_PASSWORD is used. Nearby: xK9mQ2bR7pL4');
+    expect(r).not.toBeNull();
+  });
+
+  it('matches TOKEN in AUTH_TOKEN via proximity', () => {
+    const r = detectSecrets('AUTH_TOKEN is set. Value: xK9mQ2bR7pL4');
+    expect(r).not.toBeNull();
+  });
+
+  it('does not match password inside "passwordless"', () => {
+    const r = detectSecrets('We use passwordless authentication with xK9mQ2bR7pL4');
+    expect(r).toBeNull();
   });
 });
 
