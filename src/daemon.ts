@@ -8,6 +8,16 @@ import { ServerConfig } from './types.js';
 import { computeRetention, OVER_FETCH_MULTIPLIER, TOMBSTONE_THRESHOLD } from './retention.js';
 import { detectSecrets } from './secret-filter.js';
 
+/** Defensively parse a value that should be an array but may arrive as a JSON string. */
+function ensureArray<T>(val: unknown): T[] | undefined {
+  if (val == null) return undefined;
+  if (Array.isArray(val)) return val as T[];
+  if (typeof val === 'string') {
+    try { const parsed = JSON.parse(val); if (Array.isArray(parsed)) return parsed as T[]; } catch { /* not JSON */ }
+  }
+  return undefined;
+}
+
 // Socket path (cross-platform)
 const SOCKET_PATH = process.platform === 'win32'
   ? '\\\\.\\pipe\\shared-memory'
@@ -123,7 +133,7 @@ async function handleRequest(method: string, params: Record<string, unknown>): P
         vector,
         agent: (params.agent as string) || 'unknown',
         project: (params.project as string) || 'default',
-        tags: (params.tags as string[]) || [],
+        tags: ensureArray<string>(params.tags) || [],
       });
       return { id };
     }
@@ -141,7 +151,7 @@ async function handleRequest(method: string, params: Record<string, unknown>): P
         limit: requestedLimit * OVER_FETCH_MULTIPLIER,
         agent: params.agent as string | undefined,
         project: params.project as string | undefined,
-        tags: params.tags as string[] | undefined,
+        tags: ensureArray<string>(params.tags),
       });
 
       const now = Date.now();
@@ -186,7 +196,7 @@ async function handleRequest(method: string, params: Record<string, unknown>): P
 
     case 'load_memories': {
       const storage = await getStorage(params);
-      const ids = params.ids as string[];
+      const ids = ensureArray<string>(params.ids) || [];
       const results = await storage.getByIds(ids);
 
       // Reinforce loaded memories (fire and forget)
