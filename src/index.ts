@@ -10,6 +10,16 @@ import {
 import * as client from './client.js';
 import { SearchResult } from './types.js';
 
+/** Defensively parse a value that should be an array but may arrive as a JSON string. */
+function ensureArray<T>(val: unknown): T[] | undefined {
+  if (val == null) return undefined;
+  if (Array.isArray(val)) return val as T[];
+  if (typeof val === 'string') {
+    try { const parsed = JSON.parse(val); if (Array.isArray(parsed)) return parsed as T[]; } catch { /* not JSON */ }
+  }
+  return undefined;
+}
+
 const args = arg({
   '--qdrant-url': String,
   '--api-key': String,
@@ -47,9 +57,9 @@ function getProjectFromGitRemote(): string | null {
 
 function getDefaultProject(): string {
   if (args['--project']) return args['--project'];
-  if (process.env.DEFAULT_PROJECT) return process.env.DEFAULT_PROJECT;
   const gitProject = getProjectFromGitRemote();
   if (gitProject) return gitProject;
+  if (process.env.DEFAULT_PROJECT) return process.env.DEFAULT_PROJECT;
   const pwd = process.env.PWD || process.cwd();
   return pwd.split('/').pop() || 'default';
 }
@@ -167,7 +177,7 @@ async function main(): Promise<void> {
           title: (toolArgs.title as string) || '',
           agent: (toolArgs.agent as string) || defaultAgent,
           project: defaultProject,
-          tags: toolArgs.tags as string[] | undefined,
+          tags: ensureArray<string>(toolArgs.tags),
         });
         return { content: [{ type: 'text', text: `Memory stored with ID: ${result.id}` }] };
       }
@@ -178,7 +188,7 @@ async function main(): Promise<void> {
           limit: toolArgs.limit as number | undefined,
           agent: toolArgs.agent as string | undefined,
           project: defaultProject,
-          tags: toolArgs.tags as string[] | undefined,
+          tags: ensureArray<string>(toolArgs.tags),
         });
         const results = result.results as SearchResult[];
         return {
@@ -194,7 +204,7 @@ async function main(): Promise<void> {
       }
 
       case 'load_memories': {
-        const ids = toolArgs.ids as string[];
+        const ids = ensureArray<string>(toolArgs.ids) || [];
         const result = await client.loadMemories(ids);
         const results = result.results as SearchResult[];
         return {
