@@ -91,6 +91,7 @@ async function main(): Promise<void> {
             text: { type: 'string', description: 'The memory content to store' },
             title: { type: 'string', description: 'Short descriptive title for the memory (max 10 words)' },
             agent: { type: 'string', description: 'Agent identifier (e.g., claude-code, cursor)' },
+            project: { type: 'string', description: 'Project to store in (defaults to current project)' },
             tags: { type: 'array', items: { type: 'string' }, description: 'Tags for categorization' },
           },
           required: ['text', 'title'],
@@ -105,6 +106,7 @@ async function main(): Promise<void> {
             query: { type: 'string', description: 'Natural language search query' },
             limit: { type: 'number', description: 'Max results (default 10)' },
             agent: { type: 'string', description: 'Filter by agent' },
+            project: { type: 'string', description: 'Project to search (defaults to current project)' },
             tags: { type: 'array', items: { type: 'string' }, description: 'Filter by tags' },
           },
           required: ['query'],
@@ -129,6 +131,7 @@ async function main(): Promise<void> {
           properties: {
             limit: { type: 'number', description: 'Max results (default 10)' },
             days: { type: 'number', description: 'Days to look back (default 30)' },
+            project: { type: 'string', description: 'Project to list from (defaults to current project)' },
           },
         },
       },
@@ -176,7 +179,7 @@ async function main(): Promise<void> {
           text: toolArgs.text as string,
           title: (toolArgs.title as string) || '',
           agent: (toolArgs.agent as string) || defaultAgent,
-          project: defaultProject,
+          project: (toolArgs.project as string) || defaultProject,
           tags: ensureArray<string>(toolArgs.tags),
         });
         return { content: [{ type: 'text', text: `Memory stored with ID: ${result.id}` }] };
@@ -187,7 +190,7 @@ async function main(): Promise<void> {
           query: toolArgs.query as string,
           limit: toolArgs.limit as number | undefined,
           agent: toolArgs.agent as string | undefined,
-          project: defaultProject,
+          project: (toolArgs.project as string) || defaultProject,
           tags: ensureArray<string>(toolArgs.tags),
         });
         const results = result.results as SearchResult[];
@@ -222,7 +225,8 @@ async function main(): Promise<void> {
       case 'list_recent': {
         const limit = (toolArgs.limit as number) || 10;
         const days = (toolArgs.days as number) || 30;
-        const result = await client.listRecent({ limit, days, project: defaultProject });
+        const project = (toolArgs.project as string) || defaultProject;
+        const result = await client.listRecent({ limit, days, project });
         const results = result.results as SearchResult[];
         return {
           content: [{
