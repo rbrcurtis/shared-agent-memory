@@ -84,7 +84,7 @@ async function main(): Promise<void> {
     tools: [
       {
         name: 'store_memory',
-        description: 'Store a memory scoped to the current project. Use for insights, decisions, patterns, or any knowledge worth preserving.',
+        description: 'Store a memory. Requires both "text" (the full memory content) and "title" (short label, max 10 words).',
         inputSchema: {
           type: 'object',
           properties: {
