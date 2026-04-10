@@ -88,7 +88,7 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   const embeddings = EmbeddingService.getInstance();
   log('Loading embedding model...');
   await embeddings.initialize();
-  let modelReady = true;
+  const modelReady = true;
   log('Embedding model ready');
 
   // Register routes
