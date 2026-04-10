@@ -25,10 +25,14 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "@fastify/cors": "^11.2.0",
+    "@fastify/swagger": "^9.7.0",
+    "@fastify/swagger-ui": "^5.2.5",
     "@modelcontextprotocol/sdk": "^0.4.0",
     "@qdrant/js-client-rest": "^1.12.0",
     "@xenova/transformers": "^2.17.2",
-    "arg": "^5.0.2"
+    "arg": "^5.0.2",
+    "fastify": "^5.8.4"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
