@@ -11,6 +11,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
+    "start:api": "node dist/api/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src",
