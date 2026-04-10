@@ -19,6 +19,10 @@ Add a REST API surface to the memory-mcp system so that agents and external serv
 - Rate limiting (can be added later)
 - Skill file for agent discovery (future enhancement)
 
+### Cleanup
+
+`src/server.ts` and `src/memory.ts` are dead code — nothing imports them. Remove before adding the API surface to reduce confusion.
+
 ## Architecture
 
 ```
@@ -53,18 +57,33 @@ All endpoints are under `/api/v1`. Swagger UI is served at `/docs`, OpenAPI JSON
 | PUT | `/api/v1/memories/:id` | Update an existing memory |
 | DELETE | `/api/v1/memories/:id` | Delete a memory |
 | GET | `/api/v1/config` | Server health and config info |
+| GET | `/health` | Liveness/readiness probe |
+
+### GET /health
+
+Lightweight health check for k8s probes. Returns 200 when the server is ready to serve requests (embedding model loaded, Qdrant reachable). Returns 503 if not ready.
+
+**Response (200):**
+```json
+{
+  "status": "ok",
+  "modelReady": true
+}
+```
+
+Use as both liveness and readiness probe. The readiness probe is critical because the embedding model takes a few seconds to load on cold start — the pod should not receive traffic until `modelReady` is true.
 
 ### POST /api/v1/memories
 
-Store a new memory.
+Store a new memory. Runs `detectSecrets()` on both `text` and `title` before storing — rejects with 400 if secrets are detected.
 
 **Request body:**
 ```json
 {
   "text": "string (required)",
   "title": "string (required)",
-  "agent": "string (optional)",
-  "project": "string (optional, defaults from key config or rejected)",
+  "agent": "string (optional, defaults to 'unknown')",
+  "project": "string (required, use '*' to store without project scoping)",
   "tags": ["string"] 
 }
 ```
@@ -80,11 +99,13 @@ Store a new memory.
 
 Search memories by semantic similarity. Returns titles and IDs only (no full text, no reinforcement).
 
+Applies the full retention pipeline from the daemon: over-fetches by 3x, computes retention scores via the forgetting curve (`computeRetention()`), multiplies retention against similarity scores, re-sorts, tombstones fully decayed memories (fire-and-forget), then truncates to the requested limit. This ensures API results match the quality of MCP-path results.
+
 **Query params:**
 - `query` (required) — natural language search query
 - `limit` (optional, default 10) — max results
 - `agent` (optional) — filter by agent
-- `project` (optional) — filter by project
+- `project` (required, use `*` to search all allowed projects) — filter by project
 - `tags` (optional, comma-separated) — filter by tags
 
 **Response (200):**
@@ -100,8 +121,11 @@ Search memories by semantic similarity. Returns titles and IDs only (no full tex
 
 Fetch full text of memories by ID. Triggers reinforcement internally (increments access_count, updates last_accessed, recalculates stability). Callers don't need to know about reinforcement — they're just fetching memories.
 
+**Project scoping:** Each returned memory is checked against the key's allowed projects. Memories belonging to disallowed projects are silently omitted from results (not 403 — the caller may not know which project a memory belongs to when they have its ID from a cross-project search).
+
 **Query params:**
 - `ids` (required) — comma-separated UUIDs
+- `project` (required, use `*` to load from any allowed project)
 
 **Response (200):**
 ```json
@@ -128,8 +152,8 @@ List recently created memories. Returns titles and IDs only.
 
 **Query params:**
 - `limit` (optional, default 10)
-- `days` (optional, default 7)
-- `project` (optional)
+- `days` (optional, default 30)
+- `project` (required, use `*` to list from all allowed projects)
 
 **Response (200):**
 ```json
@@ -142,14 +166,15 @@ List recently created memories. Returns titles and IDs only.
 
 ### PUT /api/v1/memories/:id
 
-Update an existing memory's text and optionally its title.
+Update an existing memory's text and optionally its title. Runs `detectSecrets()` on `text` and `title` before updating — rejects with 400 if secrets are detected.
+
+**Project scoping:** Fetches the existing memory first and verifies its project is in the key's allowed list. Returns 403 if not.
 
 **Request body:**
 ```json
 {
   "text": "string (required)",
-  "title": "string (optional, preserves existing if omitted)",
-  "project": "string (optional)"
+  "title": "string (optional, preserves existing if omitted)"
 }
 ```
 
@@ -163,6 +188,8 @@ Update an existing memory's text and optionally its title.
 ### DELETE /api/v1/memories/:id
 
 Hard delete a memory.
+
+**Project scoping:** Fetches the existing memory first and verifies its project is in the key's allowed list. Returns 403 if not.
 
 **Response (200):**
 ```json
@@ -209,8 +236,8 @@ Keys are configured via the `API_KEYS` environment variable containing a JSON ar
 
 ```json
 [
-  {"key": "sm_abc123...", "name": "claude-personal", "projects": null, "default_project": null},
-  {"key": "sm_def456...", "name": "openclaw", "projects": ["openclaw"], "default_project": "openclaw"}
+  {"key": "sm_abc123...", "name": "claude-personal", "projects": null},
+  {"key": "sm_def456...", "name": "openclaw", "projects": ["openclaw"]}
 ]
 ```
 
@@ -218,19 +245,23 @@ Keys are configured via the `API_KEYS` environment variable containing a JSON ar
 - Passed via `Authorization: Bearer sm_...` header
 - Compared using constant-time comparison (timing-safe)
 - Parsed once at server startup
-- `default_project` — optional fallback when the caller omits `project` from a request
 
 ### Project Scoping
 
 - `projects: null` — full access to all projects (for personal agents)
 - `projects: ["openclaw", "other"]` — restricted to listed projects only
 
+**`project` is required on all endpoints** that operate on memories (store, search, load, recent). The special value `*` means "all projects the key has access to" — for full-access keys that's everything, for restricted keys it's the key's project list.
+
 **Enforcement rules:**
 - Missing or invalid key → 401 Unauthorized
+- Missing `project` param → 400 Bad Request
 - Key valid but requested project not in allowed list → 403 Forbidden
-- If caller specifies a project, it must be in the key's allowed list (or the key has `projects: null`)
-- If caller omits project and the key has `default_project`, that value is used
-- If caller omits project and the key has no `default_project`, the request proceeds with no project filter (full-access keys) or is rejected with 400 (restricted keys)
+- `project=*` → expands to all projects in the key's allowed list (or no filter for full-access keys)
+- DELETE and PUT use fetch-then-check: retrieve the memory, verify its `project` is in the key's allowed list, reject with 403 if not
+- Load (GET by IDs) silently omits memories belonging to disallowed projects
+
+**`timingSafeEqual` for key comparison:** Keys must be hashed to equal-length buffers before comparison since `crypto.timingSafeEqual` requires equal-length inputs.
 
 ## Project Structure
 
@@ -264,7 +295,7 @@ plans/
 
 ### Dockerfile
 
-Multi-stage build:
+Multi-stage build using the existing `package.json` (ships with MCP deps too, but they're small and not worth the complexity of a separate package.json):
 
 1. **Build stage:** Install deps, compile TypeScript
 2. **Production stage:** Copy dist/, node_modules (production only), expose port
@@ -300,6 +331,11 @@ Example agent instruction (CLAUDE.md):
 - Full docs: http://memory-api.local:3000/docs
 ```
 
+## What Changes
+
+- `src/server.ts` — **removed** (dead code, superseded by index.ts)
+- `src/memory.ts` — **removed** (dead code, daemon bypasses it)
+
 ## What Stays Unchanged
 
 - `src/daemon.ts` — Unix socket JSON-RPC server
@@ -310,4 +346,4 @@ Example agent instruction (CLAUDE.md):
 - `src/retention.ts` — forgetting curve logic (consumed by both)
 - `src/secret-filter.ts` — secret detection (consumed by both)
 - `src/types.ts` — type definitions (consumed by both)
-- All existing tests
+- All existing tests (except any that import removed dead code)
