@@ -17,8 +17,8 @@ export const storeMemoryBody = {
   type: "object",
   required: ["text", "title", "project"],
   properties: {
-    text: { type: "string" },
-    title: { type: "string", description: "max 10 words" },
+    text: { type: "string", minLength: 1 },
+    title: { type: "string", minLength: 1, description: "max 10 words" },
     agent: { type: "string", default: "unknown" },
     project: { type: "string", description: "required, use * for unscoped" },
     tags: { type: "array", items: { type: "string" }, default: [] },
@@ -138,7 +138,7 @@ export const updateMemoryBody = {
   type: "object",
   required: ["text"],
   properties: {
-    text: { type: "string" },
+    text: { type: "string", minLength: 1 },
     title: { type: "string", description: "preserves existing if omitted" },
   },
 } as const;
