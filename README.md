@@ -5,8 +5,9 @@ MCP server enabling multiple AI agents to share persistent memory via Qdrant.
 ## Features
 
 - **Hybrid search** — dense vector similarity (all-MiniLM-L6-v2) + BM25 keyword matching, fused with Reciprocal Rank Fusion
-- **Ebbinghaus forgetting curve** — memories decay over time; frequently-accessed memories persist, unused ones fade and get tombstoned
-- **Secret filtering** — three-layer detection (known token prefixes, high-entropy strings, keyword proximity) rejects memories containing API keys, tokens, or credentials
+- **Ebbinghaus forgetting curve** — memories decay over time; frequently-accessed memories persist, unused ones fade and get tombstoned after ~6 months
+- **Secret filtering** — four-layer detection (known token prefixes, high-entropy strings, credential assignment, keyword proximity) rejects memories containing API keys, tokens, or credentials
+- **REST API** — authenticated Fastify server with Swagger UI for non-MCP clients
 - **Memory browser** — standalone web UI for browsing, searching, editing, and deleting memories directly via Qdrant's REST API
 - **Multi-agent / multi-Qdrant** — multiple AI agents share the same memory store; different projects can point to different Qdrant instances
 - **Two-step search** — returns titles first for context efficiency, then loads full text on demand
@@ -132,7 +133,7 @@ node dist/index.js \
   --agent claude-code
 ```
 
-## Tools
+## MCP Tools
 
 | Tool | Description |
 |------|-------------|
@@ -163,6 +164,58 @@ Search combines two retrieval strategies using Reciprocal Rank Fusion (RRF):
 
 This means a search for "Docker compose" finds memories that mention containers and orchestration (semantic) as well as those that literally say "Docker compose" (keyword). Both strategies are fused into a single ranked result list.
 
+## REST API
+
+A Fastify-based HTTP server for non-MCP clients, with OpenAPI spec and Swagger UI.
+
+### Setup
+
+```bash
+# Run directly
+PORT=3000 QDRANT_URL=http://localhost:6333 node dist/api/server.js
+
+# Or via Docker
+docker build -t shared-agent-memory .
+docker run -p 3000:3000 \
+  -e QDRANT_URL=http://your-qdrant:6333 \
+  -e QDRANT_API_KEY=optional \
+  -e API_KEYS='[{"key":"your-bearer-token","name":"my-service","projects":null}]' \
+  shared-agent-memory
+```
+
+Swagger UI available at `http://localhost:3000/docs`.
+
+### Authentication
+
+Bearer token via the `API_KEYS` environment variable (JSON array):
+
+```json
+[
+  {
+    "key": "your-secret-token",
+    "name": "my-service",
+    "projects": ["project-a", "project-b"]
+  }
+]
+```
+
+- `projects: null` — full access to all projects
+- `projects: ["a", "b"]` — restricted to listed projects
+
+### Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/health` | Health check (no auth) |
+| POST | `/api/v1/memories` | Store a memory |
+| GET | `/api/v1/memories/search` | Search with retention re-ranking |
+| GET | `/api/v1/memories/load` | Load full text by IDs, reinforce |
+| GET | `/api/v1/memories/recent` | List recent by creation date |
+| PUT | `/api/v1/memories/:id` | Update a memory |
+| DELETE | `/api/v1/memories/:id` | Delete a memory |
+| GET | `/api/v1/config` | Server config and model status |
+| GET | `/docs` | Swagger UI (no auth) |
+
 ## Ebbinghaus Forgetting Curve
 
 Memories decay over time using a model inspired by the [Ebbinghaus forgetting curve](https://en.wikipedia.org/wiki/Forgetting_curve). This ensures that unused memories fade naturally while frequently-accessed memories persist.
@@ -181,15 +234,15 @@ The retention (probability of recall) at time `t` days since last access is:
 retention = e^(-t / (BASE_HALF_LIFE * stability / ln(2)))
 ```
 
-With `BASE_HALF_LIFE = 30 days`, a never-accessed memory (stability = 1.0) drops to 50% retention after 30 days. Frequently-accessed memories decay much slower because their stability grows logarithmically:
+With `BASE_HALF_LIFE = 27 days`, a never-accessed memory (stability = 1.0) drops to 50% retention after 27 days. Frequently-accessed memories decay much slower because their stability grows logarithmically:
 
 | Access Count | Stability | Effective Half-Life |
 |-------------|-----------|-------------------|
-| 0 | 1.0 | 30 days |
-| 1 | 1.69 | 51 days |
-| 5 | 2.79 | 84 days |
-| 10 | 3.40 | 102 days |
-| 20 | 4.04 | 121 days |
+| 0 | 1.0 | 27 days |
+| 1 | 1.69 | 46 days |
+| 5 | 2.79 | 75 days |
+| 10 | 3.40 | 92 days |
+| 20 | 4.04 | 109 days |
 
 ### Reinforcement Through Loading, Not Searching
 
@@ -203,6 +256,8 @@ The key design choice: **searching does not reinforce memories**. Only `load_mem
 
 When a memory's retention drops below 1% (`TOMBSTONE_THRESHOLD = 0.01`), it is soft-deleted by setting a `tombstoned_at` timestamp. Tombstoned memories are excluded from all future queries but remain in Qdrant for potential recovery.
 
+A never-accessed memory reaches the tombstone threshold after approximately **180 days (~6 months)**. Memories that have been loaded even a few times last much longer — a memory loaded 5 times won't tombstone for over a year.
+
 Tombstone checks happen lazily during search — when a search returns a decayed memory, it gets tombstoned as a side effect.
 
 ### Search Re-Ranking
@@ -213,11 +268,14 @@ During search, the raw similarity score from Qdrant is multiplied by the retenti
 
 Memories are scanned for secrets before storage. If a secret is detected, the memory is rejected with an error describing what was found — the calling agent can then redact and retry.
 
-Three detection layers, applied in order:
+Four detection layers, applied in order:
 
 1. **Known prefix patterns** — regex rules for ~24 known token formats (GitHub PATs, AWS keys, Slack tokens, JWTs, private keys, webhooks, etc.)
-2. **Long high-entropy strings** — base64 strings >16 chars or hex strings >32 chars with high Shannon entropy
-3. **Keyword proximity** — high-entropy strings (>8 chars, entropy >3.2) within 50 characters of keywords like `token`, `password`, `api_key`, `secret`, `bearer`
+2. **Long high-entropy strings** — hex strings ≥32 chars or base64 strings ≥17 chars with Shannon entropy >3.0
+3. **Credential assignment** — direct assignment patterns (`token=value`, `api_key: value`) where the value contains digits or special characters
+4. **Keyword proximity** — high-entropy strings (>8 chars, entropy >3.2) within 50 characters of keywords like `token`, `password`, `api_key`, `secret`, `bearer`
+
+False positive filtering skips code identifiers (camelCase), file paths, kebab-case strings, and MongoDB ObjectIDs.
 
 Applied to both `store_memory` and `update_memory` at the daemon level, covering all clients.
 
@@ -244,6 +302,9 @@ For Kubernetes deployment, see `k8s/` directory (nginx serving static files via 
 Agent 1 (Claude Code) ──┐
                         ├── MCP Wrapper ── Unix Socket ── Daemon ── Qdrant
 Agent 2 (Cursor)     ──┘                   /tmp/shared-memory.sock
+
+External Service ────── REST API (Fastify) ── Qdrant
+                        localhost:3000
 ```
 
 The daemon architecture keeps the embedding model loaded in memory for fast responses:
@@ -251,6 +312,7 @@ The daemon architecture keeps the embedding model loaded in memory for fast resp
 - **MCP Wrapper** (`index.ts`): Thin stdio server that forwards tool calls
 - **Daemon** (`daemon.ts`): Long-running process holding the model, listens on Unix socket
 - **Client** (`client.ts`): Auto-starts daemon on first request, handles reconnection
+- **REST API** (`api/server.ts`): Standalone Fastify server for HTTP access, shares storage and embedding code with the daemon
 
 ### Daemon Behavior
 
@@ -263,6 +325,18 @@ The daemon architecture keeps the embedding model loaded in memory for fast resp
 | Logs | `/tmp/shared-memory-daemon.log` |
 
 Embeddings generated locally using `all-MiniLM-L6-v2` (384 dimensions). Zero external API costs.
+
+## Docker
+
+```bash
+docker build -t shared-agent-memory .
+docker run -p 3000:3000 \
+  -e QDRANT_URL=http://host.docker.internal:6333 \
+  -e API_KEYS='[{"key":"your-token","name":"default","projects":null}]' \
+  shared-agent-memory
+```
+
+The Docker image runs the REST API server. For the MCP server, run `node dist/index.js` directly (it uses stdio, not HTTP).
 
 ## License
 
