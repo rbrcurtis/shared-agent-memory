@@ -84,7 +84,7 @@ async function main(): Promise<void> {
     tools: [
       {
         name: 'store_memory',
-        description: 'Store a memory. Requires both "text" (the full memory content) and "title" (short label, max 10 words).',
+        description: 'Store a memory (REQUIRED params: title, text). Title is a short descriptive label (max 10 words). Text is the full memory content.',
         inputSchema: {
           type: 'object',
           properties: {
