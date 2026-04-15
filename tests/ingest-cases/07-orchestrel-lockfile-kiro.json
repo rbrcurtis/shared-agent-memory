@@ -1,0 +1,14 @@
+{
+  "name": "Orchestrel lockfile error debugging - Kiro plugin",
+  "file": "~/.claude/projects/-example-orchestrel/86a8c066-c134-4c2f-a569-3cceb2063572.jsonl",
+  "project": "orchestrel",
+  "description": "Debugged 'lockfile.lock is not a function' error in Orchestrel sessions. Initially thought to be Claude Code bug but traced to Kiro plugin running inside OpenCode (Bun-based). Error started on a specific date as a new regression. Investigated Kiro plugin lockfile code.",
+  "expected_topics": [
+    ["lockfile error", "lockfile.lock", "proper-lockfile", "lockfile bug"],
+    ["Kiro plugin", "Kiro opencode", "Kiro fork", "Kiro integration"],
+    ["Bun lockfile", "Bun ESM", "CJS interop", "module resolution"]
+  ],
+  "expected_update_ids": ["96207a67-ea03-4bd3-a910-d69ad1338569", "bf1afc65-0522-44bb-bbf7-5f4791dbae49"],
+  "min_learnings": 1,
+  "max_learnings": 6
+}

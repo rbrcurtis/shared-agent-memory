@@ -1,0 +1,14 @@
+{
+  "name": "Orchestrel card creation and agent triggering",
+  "file": "~/.claude/projects/-example-orchestrel/87472d89-37c5-4e68-9de3-d4bb9c27c0dc.jsonl",
+  "project": "orchestrel",
+  "description": "Tested creating a new card in the Orchestrel dnd project via browser. Discovered cards in Backlog do not auto-start agents - must move to Running column to trigger session. Observed existing Ping session in retry error loop. Tested card creation websocket events.",
+  "expected_topics": [
+    ["card creation", "create card", "new card", "kanban card"],
+    ["agent session", "session trigger", "agent start", "auto-approve session"],
+    ["backlog column", "running column", "card status", "kanban column"]
+  ],
+  "expected_update_ids": ["1de5829e-ff8d-4c44-a0ca-29d153d448dc"],
+  "min_learnings": 1,
+  "max_learnings": 6
+}

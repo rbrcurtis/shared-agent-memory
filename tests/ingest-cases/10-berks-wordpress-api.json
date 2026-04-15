@@ -1,0 +1,15 @@
+{
+  "name": "Berks WordPress API access via WP Engine SFTP",
+  "file": "~/.claude/projects/-example-berks/6d6158fb-839b-41ae-9f45-ff67eabd7cb2.jsonl",
+  "project": "berks",
+  "description": "Set up WordPress REST API access for the Berks conference site on WP Engine. Custom post type gva_event was not REST-accessible by default. Solution: deploy a mu-plugin via SFTP to register CPT REST support and fix auth headers. Built CFP page content with block editor format including track cards, session format accordions, and timeline.",
+  "expected_topics": [
+    ["WordPress REST API", "WP REST", "wordpress API", "wp-json", "custom post type"],
+    ["WP Engine SFTP", "SFTP credentials", "mu-plugin", "WP Engine hosting"],
+    ["block editor", "gutenberg", "editor content", "page content"],
+    ["CFP page", "call for papers", "berks conference", "speaker submission"]
+  ],
+  "expected_update_ids": ["3771efaf-0cb1-4a4a-9e07-5c8e6a06c73a"],
+  "min_learnings": 2,
+  "max_learnings": 8
+}

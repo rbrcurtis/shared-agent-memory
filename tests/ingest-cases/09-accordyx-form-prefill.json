@@ -1,0 +1,14 @@
+{
+  "name": "Accordyx proposal form email prefill and validation fix",
+  "file": "~/.claude/projects/-example-accordyx/0733dd74-dd17-42bb-9c46-e25652b6ffef.jsonl",
+  "project": "accordyx",
+  "description": "Fixed ProposalSubmissionForm to prefill and lock email when user is logged in, regardless of create/edit mode. Added useEffect to fetch /api/auth/me and populate name/affiliation. Also fixed max-proposals validation to check proposal state (withdrawn proposals should not count toward limit).",
+  "expected_topics": [
+    ["form prefill", "email prefill", "autofill email", "pre-populate email", "prefill auth"],
+    ["proposal submission", "proposal form", "submit proposal", "proposal page"],
+    ["max proposals", "validation limit", "proposals validation", "submission limit"]
+  ],
+  "expected_update_ids": ["a5a36fc5-4a90-4210-bc0e-0481044ae573"],
+  "min_learnings": 1,
+  "max_learnings": 6
+}

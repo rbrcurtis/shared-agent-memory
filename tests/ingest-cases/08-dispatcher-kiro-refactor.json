@@ -1,0 +1,15 @@
+{
+  "name": "Dispatcher multi-agent Kiro refactor planning",
+  "file": "~/.claude/projects/-example-dispatcher/d7826736-5d39-43c2-8322-986ee2537bdb.jsonl",
+  "project": "dispatcher",
+  "description": "Planned refactor of Dispatcher/Orchestrel to support Kiro as an AI agent backend alongside Claude Code. Challenges: two AWS jobs = two Kiro accounts requiring separate auth (XDG_DATA_HOME isolation). Decided on ACP JSON-RPC over stdio integration, per-project agent config, and HOME directory isolation for multi-account Kiro.",
+  "expected_topics": [
+    ["Kiro multi-account", "Kiro authentication", "Kiro auth", "multiple Kiro accounts"],
+    ["ACP JSON-RPC", "ACP integration", "agent protocol", "JSON-RPC agent"],
+    ["XDG isolation", "XDG environment", "XDG_CONFIG", "process isolation"],
+    ["per-project config", "project agent config", "agent type config", "project configuration"]
+  ],
+  "expected_update_ids": ["01036bea-7c6a-4076-91bb-adbd339bec00", "f89e8e0d-bbc1-4dd9-a1c9-e6f12e017872"],
+  "min_learnings": 2,
+  "max_learnings": 8
+}

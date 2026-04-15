@@ -1,0 +1,15 @@
+{
+  "name": "Agent TUI comparison - pi vs OpenCode vs Claude Code",
+  "file": "~/.claude/projects/-example-project/594b37ef-555d-4a33-96f0-8f47a6324a38.jsonl",
+  "project": "plans",
+  "description": "Compared pi (TypeScript agent TUI) vs OpenCode vs Claude Code. OpenCode has persistent bugs (double-tap escape broken). Pi supports subagents via package system, RPC mode, and programmatic integration. Planned migration from OpenCode to pi in Orchestrel backend.",
+  "expected_topics": [
+    ["pi TUI", "pi terminal", "pi agent", "pi coding agent", "oh-my-pi"],
+    ["OpenCode bugs", "OpenCode issues", "OpenCode problems", "OpenCode reliability"],
+    ["subagent support", "sub-agent", "subagents packages", "concurrent agents"],
+    ["orchestrel migration", "opencode replacement", "switching from opencode", "migration omp"]
+  ],
+  "expected_update_ids": ["268947b8-7202-4ea8-8205-6e9f915603c5", "01036bea-7c6a-4076-91bb-adbd339bec00"],
+  "min_learnings": 2,
+  "max_learnings": 8
+}

@@ -1,0 +1,15 @@
+{
+  "name": "Job application browser automation",
+  "file": "~/.claude/projects/-example-project/a22ad427-8755-4503-a212-fdfb5a9661d1.jsonl",
+  "project": "plans",
+  "description": "Used browser automation to submit a job application on an Oracle HCM portal. Retrieved resume data, navigated the form, handled email verification code via Gmail, and fixed field ordering issues (name fields were swapped). Filled address autocomplete fields.",
+  "expected_topics": [
+    ["browser automation", "playwright automation", "web form", "automated application"],
+    ["Oracle HCM", "job application", "job portal", "career portal"],
+    ["email verification", "verification code gmail", "code extraction", "gmail verification"],
+    ["form prefill", "autofill", "form field", "address autocomplete"]
+  ],
+  "expected_update_ids": [],
+  "min_learnings": 1,
+  "max_learnings": 6
+}

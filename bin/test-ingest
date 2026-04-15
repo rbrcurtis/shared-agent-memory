@@ -1,0 +1,465 @@
+#!/usr/bin/env bash
+set -e
+
+# test-ingest — Run ingestion pipeline against defined test cases and score results.
+# Usage: ./bin/test-ingest [--model qwen2.5:14b] [--test N]
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CASES_DIR="$SCRIPT_DIR/../tests/ingest-cases"
+INGEST_SCRIPT="$SCRIPT_DIR/ingest-transcript"
+
+# ---------------------------------------------------------------------------
+# Defaults
+# ---------------------------------------------------------------------------
+MODEL="qwen2.5:14b"
+ONLY_TEST=""
+
+# ---------------------------------------------------------------------------
+# Arg parsing
+# ---------------------------------------------------------------------------
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --model)  MODEL="$2";      shift 2 ;;
+    --test)   ONLY_TEST="$2";  shift 2 ;;
+    *)        echo "Unknown argument: $1" >&2; exit 1 ;;
+  esac
+done
+
+# ---------------------------------------------------------------------------
+# Temp dir + cleanup
+# ---------------------------------------------------------------------------
+TMP_DIR=$(mktemp -d /tmp/test-ingest-XXXXXX)
+cleanup() {
+  rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT
+
+# ---------------------------------------------------------------------------
+# Collect and sort test case files
+# ---------------------------------------------------------------------------
+mapfile -t ALL_CASES < <(ls "$CASES_DIR"/*.json 2>/dev/null | sort)
+
+if [[ ${#ALL_CASES[@]} -eq 0 ]]; then
+  echo "No test cases found in $CASES_DIR" >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Scoring function — inline Python
+# score_test <case_file> <ingest_output_file>
+# Prints a JSON result object to stdout
+# ---------------------------------------------------------------------------
+score_test() {
+  local case_file="$1"
+  local output_file="$2"
+
+  python3 - "$case_file" "$output_file" <<'PYEOF'
+import json, sys, re
+
+case_file = sys.argv[1]
+output_file = sys.argv[2]
+
+with open(case_file) as f:
+    tc = json.load(f)
+
+with open(output_file) as f:
+    raw_output = f.read()
+
+# -------------------------------------------------------------------------
+# Parse ingest output
+# -------------------------------------------------------------------------
+
+# JSON valid check: look for parse failure markers in stderr
+json_valid = True
+if 'Could not parse candidates JSON' in raw_output or 'Could not parse decisions JSON' in raw_output:
+    json_valid = False
+if 'Failed to parse candidate learnings' in raw_output or 'Failed to parse decisions' in raw_output:
+    json_valid = False
+
+# Extract candidate count
+candidate_count = 0
+m = re.search(r'Extracted (\d+) candidate learnings', raw_output)
+if m:
+    candidate_count = int(m.group(1))
+
+# Extract decisions from log lines
+stores = []
+updates = []  # list of (id, title)
+skips = []
+
+for line in raw_output.splitlines():
+    # [DRY-RUN] STORE: Title
+    m = re.match(r'\[ingest\] \[DRY-RUN\] STORE: (.+)', line)
+    if m:
+        stores.append(m.group(1).strip())
+        continue
+    # [DRY-RUN] UPDATE id=xxx: Title
+    m = re.match(r'\[ingest\] \[DRY-RUN\] UPDATE id=([^:]*): (.+)', line)
+    if m:
+        updates.append((m.group(1).strip(), m.group(2).strip()))
+        continue
+    # STORE: Title (non dry-run)
+    m = re.match(r'\[ingest\] STORE: (.+)', line)
+    if m:
+        stores.append(m.group(1).strip())
+        continue
+    # UPDATE id=xxx: Title (non dry-run)
+    m = re.match(r'\[ingest\] UPDATE id=([^:]*): (.+)', line)
+    if m:
+        updates.append((m.group(1).strip(), m.group(2).strip()))
+        continue
+    # SKIP: Title — reason
+    m = re.match(r'\[ingest\] SKIP: (.+?) —', line)
+    if m:
+        skips.append(m.group(1).strip())
+        continue
+    # Unknown action fallback also counts as skip
+    m = re.match(r"\[ingest\] Unknown action '.+' for: (.+?) —", line)
+    if m:
+        skips.append(m.group(1).strip())
+
+# Also parse summary line as fallback for counts
+summary_m = re.search(r'Summary: (\d+) extracted, (\d+) stored, (\d+) updated, (\d+) skipped', raw_output)
+
+total_decisions = len(stores) + len(updates) + len(skips)
+
+# If we got no decisions from log parsing but have a summary, use that
+# (non-dry-run mode won't have [DRY-RUN] prefix but does have STORE/UPDATE logs)
+if total_decisions == 0 and summary_m:
+    candidate_count = int(summary_m.group(1))
+    # We can't reconstruct titles, but we can get counts
+    stores_count = int(summary_m.group(2))
+    updates_count = int(summary_m.group(3))
+    skips_count = int(summary_m.group(4))
+    total_decisions = stores_count + updates_count + skips_count
+else:
+    stores_count = len(stores)
+    updates_count = len(updates)
+    skips_count = len(skips)
+
+# -------------------------------------------------------------------------
+# Collect all titles for scoring
+# -------------------------------------------------------------------------
+all_titles = stores + [t for (_, t) in updates] + skips
+
+# -------------------------------------------------------------------------
+# Scoring
+# -------------------------------------------------------------------------
+score = 0
+breakdown = {}
+
+# 1. JSON valid (2 pts)
+pts_json = 2 if json_valid else 0
+score += pts_json
+breakdown['json_valid'] = pts_json
+
+# 2. Learning count in range (1 pt)
+min_l = tc.get('min_learnings', 1)
+max_l = tc.get('max_learnings', 10)
+count_in_range = min_l <= total_decisions <= max_l
+pts_count = 1 if count_in_range else 0
+score += pts_count
+breakdown['count_in_range'] = pts_count
+
+# 3. Topic coverage (3 pts)
+def phrase_matches(phrase, titles_texts):
+    """Check if a single phrase matches any title/text. Fuzzy: 2+ words from phrase must appear."""
+    words = [w.lower() for w in re.split(r'[\s\-_/]+', phrase) if len(w) > 2]
+    if not words:
+        return False
+    # Single meaningful word: must appear as substring
+    if len(words) == 1:
+        word = words[0]
+        for tt in titles_texts:
+            if word in tt.lower():
+                return True
+        return False
+    # Multiple words: at least 2 must appear in the same title/text
+    for tt in titles_texts:
+        tt_lower = tt.lower()
+        matches = sum(1 for w in words if w in tt_lower)
+        if matches >= 2:
+            return True
+    return False
+
+def topic_matches(topic, titles_texts):
+    """Topic is a list of alternative phrases. Match if ANY phrase matches."""
+    if isinstance(topic, list):
+        return any(phrase_matches(phrase, titles_texts) for phrase in topic)
+    # Fallback: treat as single phrase string
+    return phrase_matches(topic, titles_texts)
+
+expected_topics = tc.get('expected_topics', [])
+matched_topics = []
+missed_topics = []
+
+for topic in expected_topics:
+    if topic_matches(topic, all_titles):
+        matched_topics.append(topic)
+    else:
+        missed_topics.append(topic)
+
+if expected_topics:
+    topic_ratio = len(matched_topics) / len(expected_topics)
+else:
+    topic_ratio = 1.0
+
+pts_topics = round(3 * topic_ratio, 2)
+score += pts_topics
+breakdown['topic_coverage'] = pts_topics
+breakdown['matched_topics'] = matched_topics
+breakdown['missed_topics'] = missed_topics
+
+# 4. No empty UPDATE IDs (1 pt)
+empty_ids = [t for (uid, t) in updates if not uid.strip()]
+pts_empty_ids = 1 if not empty_ids else 0
+score += pts_empty_ids
+breakdown['no_empty_update_ids'] = pts_empty_ids
+
+# 5. No duplicate UPDATE IDs (1 pt)
+update_ids = [uid for (uid, _) in updates if uid.strip()]
+dup_ids = len(update_ids) != len(set(update_ids))
+pts_dup_ids = 0 if dup_ids else 1
+score += pts_dup_ids
+breakdown['no_dup_update_ids'] = pts_dup_ids
+
+# 6. Title quality (1 pt): all titles under 80 chars and at least 3 words
+bad_titles = []
+for t in all_titles:
+    if len(t) > 80 or len(t.split()) < 3:
+        bad_titles.append(t)
+pts_titles = 1 if not bad_titles else 0
+score += pts_titles
+breakdown['title_quality'] = pts_titles
+breakdown['bad_titles'] = bad_titles
+
+# 7. Update targeting (2 pts)
+expected_update_ids = tc.get('expected_update_ids', [])
+actual_update_ids = [uid for (uid, _) in updates if uid.strip()]
+if not expected_update_ids:
+    pts_update_targets = 2  # free points when no updates expected
+    hit_ids = []
+    missed_ids = []
+else:
+    hit_ids = [eid for eid in expected_update_ids if eid in actual_update_ids]
+    missed_ids = [eid for eid in expected_update_ids if eid not in actual_update_ids]
+    pts_update_targets = round(2 * len(hit_ids) / len(expected_update_ids), 2)
+score += pts_update_targets
+breakdown['update_targets'] = pts_update_targets
+breakdown['hit_ids'] = hit_ids
+breakdown['missed_ids'] = missed_ids
+
+# Round final score
+score = round(score, 2)
+
+result = {
+    'score': score,
+    'max_score': 11,
+    'candidate_count': candidate_count,
+    'stores': stores_count,
+    'updates': updates_count,
+    'skips': skips_count,
+    'all_titles': all_titles,
+    'json_valid': json_valid,
+    'breakdown': breakdown,
+    'min_learnings': min_l,
+    'max_learnings': max_l,
+    'count_in_range': count_in_range,
+    'expected_topics': expected_topics,
+    'matched_topics': matched_topics,
+    'missed_topics': missed_topics,
+    'expected_update_ids': expected_update_ids,
+    'hit_ids': hit_ids,
+    'missed_ids': missed_ids,
+    'error': 'ERROR' in raw_output and 'Cannot reach daemon' in raw_output,
+}
+print(json.dumps(result))
+PYEOF
+}
+
+# ---------------------------------------------------------------------------
+# Print test result
+# ---------------------------------------------------------------------------
+print_test_result() {
+  local test_num="$1"
+  local tc_name="$2"
+  local model="$3"
+  local duration="$4"
+  local result_json="$5"
+
+  python3 - "$test_num" "$tc_name" "$model" "$duration" "$result_json" <<'PYEOF'
+import json, sys
+
+num = sys.argv[1]
+name = sys.argv[2]
+model = sys.argv[3]
+duration = sys.argv[4]
+r = json.loads(sys.argv[5])
+
+tick = lambda b: "✓" if b else "✗"
+
+print(f"\n=== Test {num}: {name} ===")
+print(f"Model: {model} | Duration: {duration}s")
+
+# Learning count
+in_range_sym = tick(r['count_in_range'])
+print(f"Learnings: {r['stores']+r['updates']+r['skips']} (expected: {r['min_learnings']}-{r['max_learnings']}) {in_range_sym}")
+
+# Topic coverage
+topics_total = len(r['expected_topics'])
+topics_matched = len(r['matched_topics'])
+if topics_total > 0:
+    topic_sym = tick(topics_matched == topics_total)
+    # For display, show first phrase of each topic group
+    def topic_label(t):
+        return t[0] if isinstance(t, list) else t
+    missed_str = ', '.join(topic_label(t) for t in r['missed_topics']) if r['missed_topics'] else ''
+    matched_str = ', '.join(topic_label(t) for t in r['matched_topics']) if r['matched_topics'] else 'none'
+    if r['missed_topics']:
+        print(f"Topics matched: {topics_matched}/{topics_total} ({matched_str}) {topic_sym} missed: {missed_str}")
+    else:
+        print(f"Topics matched: {topics_matched}/{topics_total} ({matched_str}) {topic_sym}")
+else:
+    print("Topics: N/A (no expected topics)")
+
+# Decisions
+print(f"Decisions: {r['stores']} store, {r['updates']} update, {r['skips']} skip")
+
+# Update targets
+b = r['breakdown']
+expected_ids = r.get('expected_update_ids', [])
+hit_ids = r.get('hit_ids', [])
+missed_ids = r.get('missed_ids', [])
+if not expected_ids:
+    print(f"Update targets: N/A (none expected) ✓")
+else:
+    hit_short = ', '.join(uid[:8] + '...' for uid in hit_ids) if hit_ids else 'none'
+    hit_count = len(hit_ids)
+    total_expected = len(expected_ids)
+    target_sym = tick(hit_count == total_expected)
+    if missed_ids:
+        missed_short = ', '.join(uid[:8] + '...' for uid in missed_ids)
+        print(f"Update targets: {hit_count}/{total_expected} hit ({hit_short}) {target_sym} missed: {missed_short}")
+    else:
+        print(f"Update targets: {hit_count}/{total_expected} hit ({hit_short}) {target_sym}")
+
+# Quality flags
+json_sym = tick(b['json_valid'] == 2)
+empty_sym = tick(b['no_empty_update_ids'] == 1)
+dup_sym = tick(b['no_dup_update_ids'] == 1)
+title_sym = tick(b['title_quality'] == 1)
+print(f"JSON valid: {json_sym} | Empty IDs: {empty_sym} | Dup IDs: {dup_sym} | Titles: {title_sym}")
+
+print(f"Score: {r['score']:.0f}/11")
+
+# Show titles (up to 5)
+titles = r['all_titles']
+if titles:
+    shown = titles[:5]
+    titles_fmt = ', '.join(f'"{t[:60]}"' for t in shown)
+    if len(titles) > 5:
+        titles_fmt += f' ... (+{len(titles)-5} more)'
+    print(f"Titles: {titles_fmt}")
+PYEOF
+}
+
+# ---------------------------------------------------------------------------
+# Run all tests
+# ---------------------------------------------------------------------------
+declare -a SCORES
+declare -a NAMES
+declare -a DURATIONS
+TOTAL_SCORE=0
+TESTS_PASSED=0
+TOTAL_DURATION=0
+
+test_num=0
+for case_file in "${ALL_CASES[@]}"; do
+  test_num=$((test_num + 1))
+
+  # Skip if --test N was specified
+  if [[ -n "$ONLY_TEST" && "$ONLY_TEST" != "$test_num" ]]; then
+    continue
+  fi
+
+  # Read test case metadata
+  TC_NAME=$(python3 -c "import json; d=json.load(open('$case_file')); print(d['name'])")
+  TC_FILE=$(python3 -c "import json; d=json.load(open('$case_file')); print(d['file'])")
+  TC_PROJECT=$(python3 -c "import json; d=json.load(open('$case_file')); print(d.get('project','unknown'))")
+
+  echo ""
+  echo "Running test $test_num: $TC_NAME..."
+
+  OUTPUT_FILE="$TMP_DIR/test-${test_num}-output.txt"
+
+  START_TIME=$(date +%s)
+
+  # Run the ingest script, capturing both stdout and stderr
+  "$INGEST_SCRIPT" \
+    --file "$TC_FILE" \
+    --model "$MODEL" \
+    --project "$TC_PROJECT" \
+    --dry-run \
+    > "$OUTPUT_FILE" 2>&1 || true
+
+  END_TIME=$(date +%s)
+  DURATION=$((END_TIME - START_TIME))
+  TOTAL_DURATION=$((TOTAL_DURATION + DURATION))
+
+  # Score the test
+  RESULT_JSON=$(score_test "$case_file" "$OUTPUT_FILE" 2>/dev/null || echo '{"score":0,"max_score":11,"candidate_count":0,"stores":0,"updates":0,"skips":0,"all_titles":[],"json_valid":false,"breakdown":{"json_valid":0,"count_in_range":0,"topic_coverage":0,"no_empty_update_ids":1,"no_dup_update_ids":1,"title_quality":0,"update_targets":0,"hit_ids":[],"missed_ids":[]},"min_learnings":1,"max_learnings":8,"count_in_range":false,"expected_topics":[],"matched_topics":[],"missed_topics":[],"expected_update_ids":[],"hit_ids":[],"missed_ids":[],"error":true}')
+
+  # Print per-test result
+  print_test_result "$test_num" "$TC_NAME" "$MODEL" "$DURATION" "$RESULT_JSON"
+
+  # Accumulate totals
+  TEST_SCORE=$(echo "$RESULT_JSON" | python3 -c "import json,sys; d=json.loads(sys.stdin.read()); print(round(d['score']))")
+  SCORES+=("$TEST_SCORE")
+  NAMES+=("$TC_NAME")
+  DURATIONS+=("$DURATION")
+
+  TOTAL_SCORE=$((TOTAL_SCORE + TEST_SCORE))
+  if [[ "$TEST_SCORE" -ge 8 ]]; then
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+  fi
+done
+
+# ---------------------------------------------------------------------------
+# Summary
+# ---------------------------------------------------------------------------
+NUM_TESTS=${#SCORES[@]}
+
+if [[ "$NUM_TESTS" -eq 0 ]]; then
+  echo ""
+  echo "No tests were run."
+  exit 0
+fi
+
+python3 - "$MODEL" "$NUM_TESTS" "$TOTAL_SCORE" "$TESTS_PASSED" "$TOTAL_DURATION" "${SCORES[@]}" "${NAMES[@]}" <<'PYEOF'
+import sys
+
+model = sys.argv[1]
+num_tests = int(sys.argv[2])
+total_score = int(sys.argv[3])
+tests_passed = int(sys.argv[4])
+total_duration = int(sys.argv[5])
+
+# scores and names are interleaved after the fixed args
+scores = [int(x) for x in sys.argv[6:6+num_tests]]
+names = sys.argv[6+num_tests:6+2*num_tests]
+
+avg_duration = total_duration // num_tests if num_tests > 0 else 0
+max_total = num_tests * 11
+
+print(f"\n{'='*50}")
+print(f"=== SUMMARY ===")
+print(f"Model: {model}")
+print(f"Tests passed (≥8/11): {tests_passed}/{num_tests}")
+print(f"Total score: {total_score}/{max_total}")
+print(f"Avg duration: {avg_duration}s")
+print()
+print("Per-test scores:")
+for i, (s, n) in enumerate(zip(scores, names), 1):
+    bar = "✓" if s >= 8 else "✗"
+    print(f"  {i:2d}. {n[:50]:<50s}  {s:2d}/11 {bar}")
+PYEOF

@@ -1,0 +1,14 @@
+{
+  "name": "Parallel browser MCP research",
+  "file": "~/.claude/projects/-example-project/f8fa83e2-b023-4521-bf05-7d597454086a.jsonl",
+  "project": "plans",
+  "description": "Research session on running multiple browser MCP instances in parallel. Investigated playwright-parallel-mcp as a wrapper that spawns separate playwright/mcp processes per session for isolation. Concluded with storing the research to revisit later.",
+  "expected_topics": [
+    ["parallel browser", "playwright parallel", "multiple browser instances", "concurrent browser"],
+    ["MCP isolation", "MCP wrapper", "named servers", "parallel MCP"],
+    ["multiple agents browser", "concurrent agents", "browser sharing", "agent collision"]
+  ],
+  "expected_update_ids": ["a8ed0bc2-2602-4192-a2dd-7ed80f39c887"],
+  "min_learnings": 1,
+  "max_learnings": 5
+}

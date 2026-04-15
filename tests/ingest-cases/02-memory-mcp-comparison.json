@@ -1,0 +1,15 @@
+{
+  "name": "Memory MCP comparison and transcript ingestion design",
+  "file": "~/.claude/projects/-example-project/25e8c301-4b52-4b5c-a74f-2079f8a57ae6.jsonl",
+  "project": "plans",
+  "description": "Compared Nellie (Rust-based memory MCP) vs our shared memory-mcp. Discussed Nellie's SessionStart/Stop hooks, auto-inject approach vs search-then-decide approach, and designed a transcript ingestion pipeline for memory-mcp to solve data loss from context compaction.",
+  "expected_topics": [
+    ["nellie memory", "nellie comparison", "memory system comparison", "nellie MCP"],
+    ["transcript ingestion", "passive learning", "session extraction", "auto extract"],
+    ["compaction data loss", "compaction summary", "context loss", "compaction learnings"],
+    ["stop hook", "session end hook", "auto ingest", "post-session"]
+  ],
+  "expected_update_ids": ["972ef606-bbf2-4e49-9472-794afafa3e83", "f165456a-257e-4b36-8070-41b5d0a2cbfc"],
+  "min_learnings": 2,
+  "max_learnings": 8
+}

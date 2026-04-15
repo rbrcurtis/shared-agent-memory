@@ -1,0 +1,14 @@
+{
+  "name": "Email routing rule for WP Engine verification codes",
+  "file": "~/.claude/projects/-example-project/f4c8a55d-b74e-4021-98ab-ff3f49b9f341.jsonl",
+  "project": "plans",
+  "description": "Added email routing rule for WP Engine one-time verification codes. Discovered that rule 62 required the numeric code in the subject but WP Engine only puts the label. Debugged routing rule matching logic and fixed the rule.",
+  "expected_topics": [
+    ["email routing", "email rule", "mail routing", "email filter"],
+    ["WP Engine verification", "verification code", "one-time code", "OTP email"],
+    ["subject matching", "rule matching", "false positive", "rule condition"]
+  ],
+  "expected_update_ids": ["2e7e60ee-4c9e-45bf-863e-350da4a2b3cc"],
+  "min_learnings": 1,
+  "max_learnings": 6
+}
