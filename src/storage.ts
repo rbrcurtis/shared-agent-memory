@@ -272,6 +272,58 @@ export class StorageService {
     await this.client.deleteCollection(this.config.collectionName);
   }
 
+  async setPayload(id: string, payload: Record<string, unknown>): Promise<void> {
+    await this.client.setPayload(this.config.collectionName, {
+      payload,
+      points: [id],
+    });
+  }
+
+  async searchByTags(params: {
+    tags: string[];
+    excludeIds: string[];
+    limit: number;
+    project?: string;
+  }): Promise<SearchResult[]> {
+    if (params.tags.length === 0) return [];
+
+    const should = params.tags.map(tag => ({ key: 'tags', match: { value: tag } }));
+    const must: object[] = [
+      { is_empty: { key: 'tombstoned_at' } },
+    ];
+    if (params.project) {
+      must.push({ key: 'project', match: { value: params.project } });
+    }
+
+    const mustNot: object[] = [];
+    if (params.excludeIds.length > 0) {
+      mustNot.push({ has_id: params.excludeIds });
+    }
+
+    const results = await this.client.scroll(this.config.collectionName, {
+      limit: params.limit,
+      with_payload: true,
+      filter: { must, should, must_not: mustNot },
+    });
+
+    return results.points.map((point) => {
+      const payload = point.payload as unknown as MemoryMetadata;
+      return {
+        id: payload.id,
+        score: 0,
+        text: payload.text,
+        title: payload.title || '',
+        agent: payload.agent,
+        project: payload.project,
+        tags: normalizeTags(payload.tags),
+        created_at: payload.created_at,
+        last_accessed: payload.last_accessed,
+        access_count: payload.access_count,
+        stability: payload.stability,
+      };
+    });
+  }
+
   async reinforceMemories(points: Array<{ id: string; accessCount: number }>): Promise<void> {
     const now = new Date().toISOString();
     for (const point of points) {

@@ -6,6 +6,7 @@ import { computeRetention, OVER_FETCH_MULTIPLIER, TOMBSTONE_THRESHOLD } from '..
 import { checkProjectAccess, resolveProject } from '../middleware/auth.js';
 import type { ApiKeyConfig } from '../middleware/auth.js';
 import type { SearchResult } from '../../types.js';
+import { extractEntities } from '../../entity-extraction.js';
 import {
   storeMemoryBody,
   storeMemoryResponse,
@@ -85,13 +86,26 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
     const resolvedProject = resolved as string;
 
     const vector = await embeddings.generateEmbedding(text);
+    const userTags = tags || [];
     const id = await storage.store({
       text,
       title,
       vector,
       agent: agent || 'unknown',
       project: resolvedProject,
-      tags: tags || [],
+      tags: userTags,
+    });
+
+    // Fire-and-forget: extract entities and merge into tags
+    extractEntities(text).then(entityTags => {
+      if (entityTags.length > 0) {
+        const merged = [...new Set([...userTags, ...entityTags])];
+        storage.setPayload(id, { tags: merged }).catch((err: unknown) => {
+          log(`Failed to set entity tags for ${id}: ${err}`);
+        });
+      }
+    }).catch((err: unknown) => {
+      log(`Entity extraction failed for ${id}: ${err}`);
     });
 
     return reply.code(201).send({ data: { id } });
@@ -181,6 +195,49 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
     }
 
     scored.sort((a, b) => b.adjustedScore - a.adjustedScore);
+
+    // Second-pass: find related memories via shared entity tags
+    const firstPassIds = new Set(rawResults.map(r => r.id));
+    const entityTags = new Set<string>();
+    for (const r of scored) {
+      for (const tag of (r.tags || [])) {
+        entityTags.add(tag);
+      }
+    }
+
+    if (entityTags.size > 0) {
+      try {
+        const resolvedProject = Array.isArray(resolved) ? undefined : resolved;
+        const secondPass = await storage.searchByTags({
+          tags: [...entityTags],
+          excludeIds: [...firstPassIds],
+          limit,
+          project: resolvedProject,
+        });
+
+        const minScore = scored.length > 0
+          ? scored[scored.length - 1].adjustedScore
+          : 0.01;
+
+        for (const r of secondPass) {
+          const lastAccessed = r.last_accessed || r.created_at;
+          const daysSince = (now - new Date(lastAccessed).getTime()) / (1000 * 60 * 60 * 24);
+          const stability = r.stability ?? 1.0;
+          const retention = computeRetention(daysSince, stability);
+
+          if (retention < TOMBSTONE_THRESHOLD) {
+            toTombstone.push(r.id);
+          } else {
+            scored.push({ ...r, adjustedScore: minScore * retention * 0.9 });
+          }
+        }
+
+        scored.sort((a, b) => b.adjustedScore - a.adjustedScore);
+      } catch (err: unknown) {
+        log(`Second-pass tag search failed: ${err}`);
+      }
+    }
+
     const final = scored.slice(0, limit);
 
     if (toTombstone.length > 0) {
@@ -339,6 +396,7 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
     }
 
     const title = newTitle !== undefined ? newTitle : mem.title;
+    const existingTags = mem.tags || [];
 
     const secretInText = detectSecrets(text);
     if (secretInText) {
@@ -357,7 +415,19 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
       vector,
       agent: mem.agent,
       project: mem.project,
-      tags: mem.tags,
+      tags: existingTags,
+    });
+
+    // Fire-and-forget: re-extract entities and merge into tags
+    extractEntities(text).then(entityTags => {
+      if (entityTags.length > 0) {
+        const merged = [...new Set([...existingTags, ...entityTags])];
+        storage.setPayload(id, { tags: merged }).catch((err: unknown) => {
+          log(`Failed to set entity tags for ${id}: ${err}`);
+        });
+      }
+    }).catch((err: unknown) => {
+      log(`Entity extraction failed for ${id}: ${err}`);
     });
 
     return reply.code(200).send({ data: { success: true } });

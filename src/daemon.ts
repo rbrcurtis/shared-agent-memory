@@ -7,6 +7,7 @@ import { EmbeddingService } from './embeddings.js';
 import { ServerConfig } from './types.js';
 import { computeRetention, OVER_FETCH_MULTIPLIER, TOMBSTONE_THRESHOLD } from './retention.js';
 import { detectSecrets } from './secret-filter.js';
+import { extractEntities } from './entity-extraction.js';
 
 /** Defensively parse a value that should be an array but may arrive as a JSON string. */
 function ensureArray<T>(val: unknown): T[] | undefined {
@@ -127,14 +128,28 @@ async function handleRequest(method: string, params: Record<string, unknown>): P
       }
       const storage = await getStorage(params);
       const vector = await embeddings.generateEmbedding(text);
+      const userTags = ensureArray<string>(params.tags) || [];
       const id = await storage.store({
         text,
         title,
         vector,
         agent: (params.agent as string) || 'unknown',
         project: (params.project as string) || 'default',
-        tags: ensureArray<string>(params.tags) || [],
+        tags: userTags,
       });
+
+      // Fire-and-forget: extract entities and merge into tags
+      extractEntities(text).then(entityTags => {
+        if (entityTags.length > 0) {
+          const merged = [...new Set([...userTags, ...entityTags])];
+          storage.setPayload(id, { tags: merged }).catch((err: unknown) => {
+            log(`Failed to set entity tags for ${id}: ${err}`);
+          });
+        }
+      }).catch((err: unknown) => {
+        log(`Entity extraction failed for ${id}: ${err}`);
+      });
+
       return { id };
     }
 
@@ -171,8 +186,50 @@ async function handleRequest(method: string, params: Record<string, unknown>): P
         }
       }
 
-      // Sort by decay-adjusted score, take top N
+      // Sort by decay-adjusted score
       scored.sort((a, b) => b.score - a.score);
+
+      // Second-pass: find related memories via shared entity tags
+      const firstPassIds = new Set(results.map(r => r.id));
+      const entityTags = new Set<string>();
+      for (const r of scored) {
+        for (const tag of (r.tags || [])) {
+          entityTags.add(tag);
+        }
+      }
+
+      if (entityTags.size > 0) {
+        try {
+          const secondPass = await storage.searchByTags({
+            tags: [...entityTags],
+            excludeIds: [...firstPassIds],
+            limit: requestedLimit,
+            project: params.project as string | undefined,
+          });
+
+          const minScore = scored.length > 0
+            ? scored[scored.length - 1].score
+            : 0.01;
+
+          for (const r of secondPass) {
+            const lastAccessed = r.last_accessed || r.created_at;
+            const daysSince = (now - new Date(lastAccessed).getTime()) / (1000 * 60 * 60 * 24);
+            const stability = r.stability ?? 1.0;
+            const retention = computeRetention(daysSince, stability);
+
+            if (retention < TOMBSTONE_THRESHOLD) {
+              toTombstone.push(r.id);
+            } else {
+              scored.push({ ...r, score: minScore * retention * 0.9, retention });
+            }
+          }
+
+          scored.sort((a, b) => b.score - a.score);
+        } catch (err: unknown) {
+          log(`Second-pass tag search failed: ${err}`);
+        }
+      }
+
       const final = scored.slice(0, requestedLimit);
 
       // Async: tombstone decayed memories (fire and forget)
@@ -216,13 +273,13 @@ async function handleRequest(method: string, params: Record<string, unknown>): P
       const text = params.text as string;
       const storage = await getStorage(params);
 
-      // Preserve existing title if not provided
+      // Preserve existing title and tags if not provided
       let title = params.title as string | undefined;
-      if (!title) {
-        const existing = await storage.getByIds([id]);
-        if (existing.length > 0) {
-          title = existing[0].title;
-        }
+      let existingTags: string[] = [];
+      const existing = await storage.getByIds([id]);
+      if (existing.length > 0) {
+        if (!title) title = existing[0].title;
+        existingTags = existing[0].tags || [];
       }
       title = title || '';
 
@@ -239,8 +296,21 @@ async function handleRequest(method: string, params: Record<string, unknown>): P
         vector,
         agent: 'unknown',
         project: (params.project as string) || 'default',
-        tags: [],
+        tags: existingTags,
       });
+
+      // Fire-and-forget: re-extract entities and merge into tags
+      extractEntities(text).then(entityTags => {
+        if (entityTags.length > 0) {
+          const merged = [...new Set([...existingTags, ...entityTags])];
+          storage.setPayload(id, { tags: merged }).catch((err: unknown) => {
+            log(`Failed to set entity tags for ${id}: ${err}`);
+          });
+        }
+      }).catch((err: unknown) => {
+        log(`Entity extraction failed for ${id}: ${err}`);
+      });
+
       return { success: true };
     }
 
