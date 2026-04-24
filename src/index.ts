@@ -8,6 +8,7 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import * as client from './client.js';
+import { ingestClaudeCodeTranscript } from './ingest/index.js';
 import { SearchResult } from './types.js';
 
 /** Defensively parse a value that should be an array but may arrive as a JSON string. */
@@ -26,6 +27,9 @@ const args = arg({
   '--collection': String,
   '--agent': String,
   '--project': String,
+  '--ingest-transcript': String,
+  '--model': String,
+  '--dry-run': Boolean,
   '--help': Boolean,
   '-h': '--help',
 });
@@ -40,6 +44,10 @@ Options:
   --collection <name>   Collection name (default: COLLECTION_NAME or shared_agent_memory)
   --agent <name>        Default agent identifier (default: DEFAULT_AGENT or unknown)
   --project <name>      Default project name (default: git repo name or folder name)
+  --ingest-transcript <file>
+                         Extract durable memories from a Claude Code JSONL transcript
+  --model <name>        Ollama model for transcript extraction (default: qwen3:8b)
+  --dry-run             Show ingest decisions without writing memories
   -h, --help            Show this help message
 `);
   process.exit(0);
@@ -73,7 +81,33 @@ if (args['--agent']) process.env.DEFAULT_AGENT = args['--agent'];
 const defaultProject = getDefaultProject();
 const defaultAgent = args['--agent'] || process.env.DEFAULT_AGENT || 'unknown';
 
+function printIngestSummary(result: Awaited<ReturnType<typeof ingestClaudeCodeTranscript>>): void {
+  console.log(
+    `Ingested ${result.candidates} candidates for project ${result.project}: ` +
+      `${result.created} create, ${result.updated} update, ${result.skipped} skip` +
+      `${result.dryRun ? ' (dry run)' : ''}`,
+  );
+
+  for (const decision of result.decisions) {
+    console.log(
+      `- ${decision.action.toUpperCase()}: ${decision.title} (${decision.reason})` +
+        `${decision.id ? ` [${decision.id}]` : ''}`,
+    );
+  }
+}
+
 async function main(): Promise<void> {
+  if (args['--ingest-transcript']) {
+    const result = await ingestClaudeCodeTranscript({
+      file: args['--ingest-transcript'],
+      project: defaultProject,
+      model: args['--model'],
+      dryRun: Boolean(args['--dry-run']),
+    });
+    printIngestSummary(result);
+    return;
+  }
+
   console.error('Starting Shared Agent Memory MCP Server (wrapper)...');
   console.error(`Default Project: ${defaultProject}`);
   console.error(`Default Agent: ${defaultAgent}`);
