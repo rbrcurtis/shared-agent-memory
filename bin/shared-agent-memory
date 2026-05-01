@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -ex
+
+ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+DATA="${CLAUDE_PLUGIN_DATA:-$ROOT/.plugin-data}"
+RUNTIME="$DATA/runtime"
+STAMP="$RUNTIME/.source-sha256"
+
+mkdir -p "$RUNTIME"
+
+HASH="$(
+  cd "$ROOT"
+  {
+    sha256sum package.json package-lock.json tsconfig.json
+    find src -type f -name '*.ts' -print | sort | xargs sha256sum
+  } | sha256sum | awk '{print $1}'
+)"
+
+if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP")" != "$HASH" ] || [ ! -f "$RUNTIME/dist/index.js" ]; then
+  rm -rf "$RUNTIME/src" "$RUNTIME/dist" "$RUNTIME/node_modules"
+  cp "$ROOT/package.json" "$ROOT/package-lock.json" "$ROOT/tsconfig.json" "$RUNTIME/"
+  cp -R "$ROOT/src" "$RUNTIME/src"
+  (cd "$RUNTIME" && npm ci && npm run build)
+  printf '%s\n' "$HASH" > "$STAMP"
+fi
+
+exec node "$RUNTIME/dist/index.js" "$@"

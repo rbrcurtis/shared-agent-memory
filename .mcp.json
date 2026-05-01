@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "shared-memory": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/shared-agent-memory",
+      "env": {
+        "MEMORY_API_URL": "${user_config.memory_api_url}",
+        "MEMORY_API_KEY": "${user_config.memory_api_key}",
+        "DEFAULT_AGENT": "${user_config.default_agent}",
+        "DEFAULT_PROJECT": "${user_config.default_project}"
+      },
+      "startupTimeout": 60000
+    }
+  }
+}

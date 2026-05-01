@@ -130,14 +130,15 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
         query: string;
         limit?: number;
         agent?: string;
-        project: string;
+        project?: string;
         tags?: string;
       };
     }>,
     reply: FastifyReply,
   ) => {
     const key: ApiKeyConfig = request.apiKey;
-    const { query, limit = 10, agent, project, tags } = request.query;
+    const { query, limit = 10, agent, tags } = request.query;
+    const project = request.query.project || '*';
 
     if (!checkProjectAccess(key, project)) {
       return sendError(reply, 403, 'Access denied for project');
@@ -207,13 +208,26 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
 
     if (entityTags.size > 0) {
       try {
-        const resolvedProject = Array.isArray(resolved) ? undefined : resolved;
-        const secondPass = await storage.searchByTags({
-          tags: [...entityTags],
-          excludeIds: [...firstPassIds],
-          limit,
-          project: resolvedProject,
-        });
+        let secondPass: SearchResult[];
+        if (Array.isArray(resolved)) {
+          secondPass = [];
+          for (const proj of resolved) {
+            const results = await storage.searchByTags({
+              tags: [...entityTags],
+              excludeIds: [...firstPassIds],
+              limit,
+              project: proj,
+            });
+            secondPass.push(...results);
+          }
+        } else {
+          secondPass = await storage.searchByTags({
+            tags: [...entityTags],
+            excludeIds: [...firstPassIds],
+            limit,
+            project: resolved,
+          });
+        }
 
         const minScore = scored.length > 0
           ? scored[scored.length - 1].adjustedScore
@@ -247,7 +261,12 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
     }
 
     return reply.code(200).send({
-      data: final.map(r => ({ id: r.id, title: r.title, score: r.adjustedScore })),
+      data: final.map(r => ({
+        id: r.id,
+        title: r.title,
+        project: r.project,
+        score: r.adjustedScore,
+      })),
     });
   });
 
@@ -267,17 +286,13 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
     request: FastifyRequest<{
       Querystring: {
         ids: string;
-        project: string;
+        project?: string;
       };
     }>,
     reply: FastifyReply,
   ) => {
     const key: ApiKeyConfig = request.apiKey;
-    const { ids: idsParam, project } = request.query;
-
-    if (!checkProjectAccess(key, project)) {
-      return sendError(reply, 403, 'Access denied for project');
-    }
+    const { ids: idsParam } = request.query;
 
     const ids = idsParam.split(',').map(id => id.trim()).filter(Boolean);
     const results = await storage.getByIds(ids);
@@ -324,13 +339,14 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
       Querystring: {
         limit?: number;
         days?: number;
-        project: string;
+        project?: string;
       };
     }>,
     reply: FastifyReply,
   ) => {
     const key: ApiKeyConfig = request.apiKey;
-    const { limit = 10, days = 30, project } = request.query;
+    const { limit = 10, days = 30 } = request.query;
+    const project = request.query.project || '*';
 
     if (!checkProjectAccess(key, project)) {
       return sendError(reply, 403, 'Access denied for project');
@@ -354,7 +370,12 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
     }
 
     return reply.code(200).send({
-      data: results.map(r => ({ id: r.id, title: r.title, created_at: r.created_at })),
+      data: results.map(r => ({
+        id: r.id,
+        title: r.title,
+        project: r.project,
+        created_at: r.created_at,
+      })),
     });
   });
 

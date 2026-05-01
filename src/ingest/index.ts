@@ -41,7 +41,6 @@ export async function ingestClaudeCodeTranscript(
         id: decision.id,
         title: candidate.title,
         text: candidate.text,
-        project,
       });
     }
   }

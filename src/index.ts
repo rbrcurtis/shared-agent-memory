@@ -22,11 +22,11 @@ function ensureArray<T>(val: unknown): T[] | undefined {
 }
 
 const args = arg({
-  '--qdrant-url': String,
   '--api-key': String,
-  '--collection': String,
   '--agent': String,
   '--project': String,
+  '--memory-api-url': String,
+  '--memory-api-key': String,
   '--ingest-transcript': String,
   '--model': String,
   '--dry-run': Boolean,
@@ -39,11 +39,13 @@ if (args['--help']) {
 shared-agent-memory - MCP server for shared AI agent memory via Qdrant
 
 Options:
-  --qdrant-url <url>    Qdrant server URL (default: QDRANT_URL or http://localhost:6333)
-  --api-key <key>       Qdrant API key (default: QDRANT_API_KEY)
-  --collection <name>   Collection name (default: COLLECTION_NAME or shared_agent_memory)
+  --api-key <key>       Memory API bearer token (alias for --memory-api-key)
   --agent <name>        Default agent identifier (default: DEFAULT_AGENT or unknown)
   --project <name>      Default project name (default: git repo name or folder name)
+  --memory-api-url <url>
+                         Memory API URL (default: MEMORY_API_URL or http://localhost:3100)
+  --memory-api-key <key>
+                         Memory API bearer token (default: MEMORY_API_KEY)
   --ingest-transcript <file>
                          Extract durable memories from a Claude Code JSONL transcript
   --model <name>        Ollama model for transcript extraction (default: qwen3:8b)
@@ -72,11 +74,11 @@ function getDefaultProject(): string {
   return pwd.split('/').pop() || 'default';
 }
 
-// Set environment variables for the daemon (it reads from env)
-if (args['--qdrant-url']) process.env.QDRANT_URL = args['--qdrant-url'];
-if (args['--api-key']) process.env.QDRANT_API_KEY = args['--api-key'];
-if (args['--collection']) process.env.COLLECTION_NAME = args['--collection'];
 if (args['--agent']) process.env.DEFAULT_AGENT = args['--agent'];
+if (args['--memory-api-url']) process.env.MEMORY_API_URL = args['--memory-api-url'];
+if (args['--memory-api-key'] || args['--api-key']) {
+  process.env.MEMORY_API_KEY = args['--memory-api-key'] || args['--api-key'];
+}
 
 const defaultProject = getDefaultProject();
 const defaultAgent = args['--agent'] || process.env.DEFAULT_AGENT || 'unknown';
@@ -108,7 +110,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  console.error('Starting Shared Agent Memory MCP Server (wrapper)...');
+  console.error('Starting Shared Agent Memory MCP Server (API client)...');
   console.error(`Default Project: ${defaultProject}`);
   console.error(`Default Agent: ${defaultAgent}`);
 
@@ -133,14 +135,14 @@ async function main(): Promise<void> {
       },
       {
         name: 'search_memory',
-        description: 'Search memories by semantic similarity. Returns titles and IDs only — use load_memories to get full text for selected results.',
+        description: 'Search memories by semantic similarity. Searches all accessible projects by default and returns titles, IDs, projects, and scores — use load_memories to get full text for selected results.',
         inputSchema: {
           type: 'object',
           properties: {
             query: { type: 'string', description: 'Natural language search query' },
             limit: { type: 'number', description: 'Max results (default 10)' },
             agent: { type: 'string', description: 'Filter by agent' },
-            project: { type: 'string', description: 'Project to search (defaults to current project)' },
+            project: { type: 'string', description: 'Optional project filter. Omit to search all accessible projects.' },
             tags: { type: 'array', items: { type: 'string' }, description: 'Filter by tags' },
           },
           required: ['query'],
@@ -159,13 +161,13 @@ async function main(): Promise<void> {
       },
       {
         name: 'list_recent',
-        description: 'List recent memories within the current project. Returns titles and IDs — use load_memories for full text.',
+        description: 'List recent memories across all accessible projects by default. Returns titles, IDs, and projects — use load_memories for full text.',
         inputSchema: {
           type: 'object',
           properties: {
             limit: { type: 'number', description: 'Max results (default 10)' },
             days: { type: 'number', description: 'Days to look back (default 30)' },
-            project: { type: 'string', description: 'Project to list from (defaults to current project)' },
+            project: { type: 'string', description: 'Optional project filter. Omit to list all accessible projects.' },
           },
         },
       },
@@ -224,7 +226,7 @@ async function main(): Promise<void> {
           query: toolArgs.query as string,
           limit: toolArgs.limit as number | undefined,
           agent: toolArgs.agent as string | undefined,
-          project: (toolArgs.project as string) || defaultProject,
+          project: toolArgs.project as string | undefined,
           tags: ensureArray<string>(toolArgs.tags),
         });
         const results = result.results as SearchResult[];
@@ -234,7 +236,7 @@ async function main(): Promise<void> {
             text: results.length === 0
               ? 'No memories found.'
               : results.map((r, i) =>
-                  `[${i + 1}] (score: ${r.score.toFixed(3)}) ${r.id}\n${r.title || '(untitled)'}`
+                  `[${i + 1}] (score: ${r.score.toFixed(3)}) [${r.project}] ${r.id}\n${r.title || '(untitled)'}`
                 ).join('\n'),
           }],
         };
@@ -259,7 +261,7 @@ async function main(): Promise<void> {
       case 'list_recent': {
         const limit = (toolArgs.limit as number) || 10;
         const days = (toolArgs.days as number) || 30;
-        const project = (toolArgs.project as string) || defaultProject;
+        const project = toolArgs.project as string | undefined;
         const result = await client.listRecent({ limit, days, project });
         const results = result.results as SearchResult[];
         return {
@@ -268,7 +270,7 @@ async function main(): Promise<void> {
             text: results.length === 0
               ? 'No recent memories.'
               : results.map((r, i) =>
-                  `[${i + 1}] ${r.id} ${r.created_at}\n${r.title || '(untitled)'}`
+                  `[${i + 1}] [${r.project}] ${r.id} ${r.created_at}\n${r.title || '(untitled)'}`
                 ).join('\n'),
           }],
         };
@@ -278,7 +280,7 @@ async function main(): Promise<void> {
         const id = toolArgs.id as string;
         const text = toolArgs.text as string;
         const title = toolArgs.title as string | undefined;
-        await client.updateMemory({ id, text, title, project: defaultProject });
+        await client.updateMemory({ id, text, title });
         return { content: [{ type: 'text', text: `Memory ${id} updated.` }] };
       }
 
@@ -293,7 +295,7 @@ async function main(): Promise<void> {
         return {
           content: [{
             type: 'text',
-            text: `Qdrant URL: ${config.qdrantUrl}\nCollection: ${config.collectionName}\nDefault Agent: ${defaultAgent}\nDefault Project: ${defaultProject}\nModel Ready: ${config.modelReady}`,
+            text: `Memory API: ${config.apiBaseUrl}\nQdrant URL: ${config.qdrantUrl}\nCollection: ${config.collectionName}\nDefault Agent: ${defaultAgent}\nDefault Project: ${defaultProject}\nModel Ready: ${config.modelReady}`,
           }],
         };
       }
@@ -305,7 +307,7 @@ async function main(): Promise<void> {
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('MCP wrapper connected');
+  console.error('MCP API client connected');
 }
 
 main().catch((error) => {

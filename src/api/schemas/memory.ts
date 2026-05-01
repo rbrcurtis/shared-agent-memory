@@ -20,7 +20,7 @@ export const storeMemoryBody = {
     text: { type: "string", minLength: 1 },
     title: { type: "string", minLength: 1, description: "max 10 words" },
     agent: { type: "string", default: "unknown" },
-    project: { type: "string", description: "required, use * for unscoped" },
+    project: { type: "string", description: "required project to store in; use a concrete project name, not *" },
     tags: { type: "array", items: { type: "string" }, default: [] },
   },
 } as const;
@@ -41,12 +41,12 @@ export const storeMemoryResponse = {
 
 export const searchQuerystring = {
   type: "object",
-  required: ["query", "project"],
+  required: ["query"],
   properties: {
     query: { type: "string" },
     limit: { type: "integer", default: 10 },
     agent: { type: "string" },
-    project: { type: "string" },
+    project: { type: "string", description: "optional project filter; omit or use * for all accessible projects" },
     tags: { type: "string", description: "comma-separated" },
   },
 } as const;
@@ -61,9 +61,10 @@ export const searchResponse = {
         properties: {
           id: { type: "string", format: "uuid" },
           title: { type: "string" },
+          project: { type: "string" },
           score: { type: "number" },
         },
-        required: ["id", "title", "score"],
+        required: ["id", "title", "project", "score"],
       },
     },
   },
@@ -72,10 +73,10 @@ export const searchResponse = {
 
 export const loadQuerystring = {
   type: "object",
-  required: ["ids", "project"],
+  required: ["ids"],
   properties: {
     ids: { type: "string", description: "comma-separated UUIDs" },
-    project: { type: "string" },
+    project: { type: "string", description: "ignored; access is checked against each loaded memory" },
   },
 } as const;
 
@@ -107,11 +108,10 @@ export const loadResponse = {
 
 export const recentQuerystring = {
   type: "object",
-  required: ["project"],
   properties: {
     limit: { type: "integer", default: 10 },
     days: { type: "integer", default: 30 },
-    project: { type: "string" },
+    project: { type: "string", description: "optional project filter; omit or use * for all accessible projects" },
   },
 } as const;
 
@@ -125,9 +125,10 @@ export const recentResponse = {
         properties: {
           id: { type: "string", format: "uuid" },
           title: { type: "string" },
+          project: { type: "string" },
           created_at: { type: "string", format: "date-time" },
         },
-        required: ["id", "title", "created_at"],
+        required: ["id", "title", "project", "created_at"],
       },
     },
   },

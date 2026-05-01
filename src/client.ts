@@ -1,119 +1,87 @@
-import net from 'net';
-import path from 'path';
-import { spawn } from 'child_process';
-import { fileURLToPath } from 'url';
-import { randomUUID } from 'crypto';
+const DEFAULT_API_BASE_URL = 'http://localhost:3100';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-// Socket path (must match daemon)
-const SOCKET_PATH = process.platform === 'win32'
-  ? '\\\\.\\pipe\\shared-memory'
-  : '/tmp/shared-memory.sock';
-
-// Qdrant config from environment (passed with each request)
-function getQdrantConfig(): Record<string, string | undefined> {
-  return {
-    qdrantUrl: process.env.QDRANT_URL,
-    qdrantApiKey: process.env.QDRANT_API_KEY,
-    collectionName: process.env.COLLECTION_NAME,
-  };
+function getApiBaseUrl(): string {
+  return (
+    process.env.MEMORY_API_BASE_URL ||
+    process.env.MEMORY_API_URL ||
+    process.env.SHARED_MEMORY_API_URL ||
+    DEFAULT_API_BASE_URL
+  ).replace(/\/+$/, '');
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function getApiKey(): string {
+  return (
+    process.env.MEMORY_API_KEY ||
+    process.env.SHARED_MEMORY_API_KEY ||
+    process.env.SHARED_MEMORY_API_TOKEN ||
+    ''
+  );
 }
 
-function connect(socketPath: string): Promise<net.Socket> {
-  return new Promise((resolve, reject) => {
-    const socket = net.connect(socketPath);
-    socket.once('connect', () => resolve(socket));
-    socket.once('error', reject);
-  });
-}
-
-function spawnDaemon(): void {
-  const daemonPath = path.join(__dirname, 'daemon.js');
-  const child = spawn('node', [daemonPath], {
-    detached: true,
-    stdio: 'ignore',
-    env: { ...process.env },
-  });
-  child.unref();
-}
-
-async function ensureDaemon(): Promise<net.Socket> {
-  for (let attempt = 0; attempt < 10; attempt++) {
-    try {
-      const socket = await connect(SOCKET_PATH);
-      return socket;
-    } catch (err: unknown) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (code === 'ENOENT' || code === 'ECONNREFUSED') {
-        if (attempt === 0) {
-          spawnDaemon();
-        }
-        await sleep(300 * (attempt + 1));
-        continue;
-      }
-      throw err;
+function encodeQuery(params: Record<string, unknown>): string {
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === '') continue;
+    if (Array.isArray(value)) {
+      if (value.length > 0) qs.set(key, value.join(','));
+      continue;
     }
+    qs.set(key, String(value));
   }
-  throw new Error('Failed to connect to daemon after 10 attempts');
+  return qs.toString();
 }
 
-function readLine(socket: net.Socket): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let buffer = '';
+async function request<T>(
+  method: string,
+  path: string,
+  options: {
+    query?: Record<string, unknown>;
+    body?: Record<string, unknown>;
+  } = {},
+): Promise<T> {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    throw new Error('MEMORY_API_KEY or SHARED_MEMORY_API_KEY is required');
+  }
 
-    const onData = (chunk: Buffer) => {
-      buffer += chunk.toString();
-      const newlineIdx = buffer.indexOf('\n');
-      if (newlineIdx !== -1) {
-        socket.removeListener('data', onData);
-        socket.removeListener('error', onError);
-        resolve(buffer.slice(0, newlineIdx));
-      }
-    };
-
-    const onError = (err: Error) => {
-      socket.removeListener('data', onData);
-      reject(err);
-    };
-
-    socket.on('data', onData);
-    socket.once('error', onError);
+  const query = options.query ? encodeQuery(options.query) : '';
+  const url = `${getApiBaseUrl()}${path}${query ? `?${query}` : ''}`;
+  const res = await fetch(url, {
+    method,
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined,
   });
-}
 
-export async function call(method: string, params: Record<string, unknown> = {}): Promise<unknown> {
-  const socket = await ensureDaemon();
-  const id = randomUUID();
-  // Include Qdrant config with every request so daemon can route to correct server
-  const paramsWithConfig = { ...getQdrantConfig(), ...params };
-  const request = JSON.stringify({ jsonrpc: '2.0', id, method, params: paramsWithConfig }) + '\n';
+  const text = await res.text();
+  const json = text ? JSON.parse(text) : {};
 
-  socket.write(request);
-
-  const response = await readLine(socket);
-  socket.end();
-
-  const parsed = JSON.parse(response);
-  if (parsed.error) {
-    throw new Error(parsed.error.message);
+  if (!res.ok) {
+    const message =
+      typeof json?.error?.message === 'string'
+        ? json.error.message
+        : typeof json?.error === 'string'
+          ? json.error
+          : res.statusText;
+    throw new Error(`Memory API ${res.status}: ${message}`);
   }
-  return parsed.result;
+
+  return json as T;
 }
 
-// Convenience methods
 export async function storeMemory(params: {
   text: string;
   title: string;
   agent?: string;
-  project?: string;
+  project: string;
   tags?: string[];
 }): Promise<{ id: string }> {
-  return call('store_memory', params) as Promise<{ id: string }>;
+  const result = await request<{ data: { id: string } }>('POST', '/api/v1/memories', {
+    body: params,
+  });
+  return result.data;
 }
 
 export async function searchMemory(params: {
@@ -123,7 +91,16 @@ export async function searchMemory(params: {
   project?: string;
   tags?: string[];
 }): Promise<{ results: unknown[] }> {
-  return call('search_memory', params) as Promise<{ results: unknown[] }>;
+  const result = await request<{ data: unknown[] }>('GET', '/api/v1/memories/search', {
+    query: {
+      query: params.query,
+      limit: params.limit,
+      agent: params.agent,
+      project: params.project,
+      tags: params.tags,
+    },
+  });
+  return { results: result.data };
 }
 
 export async function listRecent(params: {
@@ -131,30 +108,48 @@ export async function listRecent(params: {
   days?: number;
   project?: string;
 }): Promise<{ results: unknown[] }> {
-  return call('list_recent', params) as Promise<{ results: unknown[] }>;
+  const result = await request<{ data: unknown[] }>('GET', '/api/v1/memories/recent', {
+    query: params,
+  });
+  return { results: result.data };
 }
 
 export async function updateMemory(params: {
   id: string;
   text: string;
   title?: string;
-  project?: string;
 }): Promise<{ success: boolean }> {
-  return call('update_memory', params) as Promise<{ success: boolean }>;
+  const result = await request<{ data: { success: boolean } }>('PUT', `/api/v1/memories/${params.id}`, {
+    body: {
+      text: params.text,
+      title: params.title,
+    },
+  });
+  return result.data;
 }
 
 export async function loadMemories(ids: string[]): Promise<{ results: unknown[] }> {
-  return call('load_memories', { ids }) as Promise<{ results: unknown[] }>;
+  const result = await request<{ data: unknown[] }>('GET', '/api/v1/memories/load', {
+    query: { ids },
+  });
+  return { results: result.data };
 }
 
 export async function deleteMemory(id: string): Promise<{ success: boolean }> {
-  return call('delete_memory', { id }) as Promise<{ success: boolean }>;
+  const result = await request<{ data: { success: boolean } }>('DELETE', `/api/v1/memories/${id}`);
+  return result.data;
 }
 
 export async function getConfig(): Promise<Record<string, unknown>> {
-  return call('get_config') as Promise<Record<string, unknown>>;
+  const result = await request<{ data: Record<string, unknown> }>('GET', '/api/v1/config');
+  return {
+    ...result.data,
+    apiBaseUrl: getApiBaseUrl(),
+  };
 }
 
 export async function ping(): Promise<{ pong: boolean; modelReady: boolean }> {
-  return call('ping') as Promise<{ pong: boolean; modelReady: boolean }>;
+  const res = await fetch(`${getApiBaseUrl()}/health`);
+  const body = await res.json() as { modelReady?: boolean };
+  return { pong: res.ok, modelReady: Boolean(body.modelReady) };
 }

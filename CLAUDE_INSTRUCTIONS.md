@@ -1,54 +1,39 @@
 # Claude Code Setup Instructions
 
-Install the shared-agent-memory MCP server for persistent memory across sessions.
+Install the shared-agent-memory Claude Code plugin for persistent memory across sessions.
 
 ## Before Starting
 
-Ask the user:
-1. **Clone location** - Where should the repo be cloned? (e.g., `~/shared-agent-memory`, `~/Code/shared-agent-memory`)
-2. **Qdrant URL** - Where is your Qdrant instance? (e.g., `http://localhost:6333`, `https://qdrant.example.com`)
-3. **API Key** - Does your Qdrant require an API key? If so, what is it?
-4. **Scope** - Install for this project only, or all projects?
+Confirm:
+1. **Memory API URL** - usually `http://localhost:3100`
+2. **Memory API key** - bearer token configured on the API server
+3. **Scope** - user, project, or local
 
 ## Steps
 
-1. Clone and build (replace `<PATH>` with user's chosen location):
+1. Install the marketplace and plugin:
 ```bash
-git clone https://github.com/rbrcurtis/shared-agent-memory.git <PATH>
-cd <PATH>
-npm install
-npm run build
+curl -fsSL https://raw.githubusercontent.com/rbrcurtis/shared-agent-memory/main/install.sh | bash
 ```
 
-2. Add the MCP server (replace `<PATH>`, `<QDRANT_URL>`, and optionally add `<API_KEY>`):
-
-**For project-level (recommended)** - saves to `.mcp.json` in current directory:
+Manual equivalent:
 ```bash
-claude mcp add-json shared-memory '{
-  "type": "stdio",
-  "command": "node",
-  "args": ["<PATH>/dist/index.js"],
-  "env": {
-    "QDRANT_URL": "<QDRANT_URL>",
-    "QDRANT_API_KEY": "<API_KEY_OR_OMIT>",
-    "DEFAULT_AGENT": "claude-code"
-  }
-}'
+claude plugin marketplace add rbrcurtis/shared-agent-memory
+claude plugin install shared-agent-memory@shared-agent-memory
 ```
 
-**For user-level** - saves to `~/.claude.json`, applies to all projects:
+Or run the setup script from a checkout:
 ```bash
-claude mcp add-json shared-memory '{
-  "type": "stdio",
-  "command": "node",
-  "args": ["<PATH>/dist/index.js"],
-  "env": {
-    "QDRANT_URL": "<QDRANT_URL>",
-    "QDRANT_API_KEY": "<API_KEY_OR_OMIT>",
-    "DEFAULT_AGENT": "claude-code"
-  }
-}' -s user
+git clone https://github.com/rbrcurtis/shared-agent-memory.git
+cd shared-agent-memory
+scripts/setup-claude-code.sh
 ```
+
+2. When prompted, enter:
+- `memory_api_url`: memory API base URL
+- `memory_api_key`: API bearer token
+- `default_agent`: `claude-code`
+- `default_project`: leave empty unless you need a fixed project
 
 3. Restart Claude Code to load the new MCP.
 
@@ -61,7 +46,7 @@ After restarting, these tools should be available:
 - `list_recent` - List recent memories (titles and IDs)
 - `update_memory` - Update existing memory
 - `delete_memory` - Remove a memory by ID
-- `get_config` - Show current configuration and daemon status
+- `get_config` - Show current MCP/API configuration
 
 ## Two-Step Search Pattern
 
@@ -85,8 +70,7 @@ When calling `store_memory`, always provide both `title` and `text`:
 
 ## Notes
 
-- **Project vs User scope**: Project-level (`.mcp.json`) is recommended when using different Qdrant servers per project. User-level (`~/.claude.json`) is simpler when sharing one Qdrant everywhere.
-- **Multi-Qdrant**: The daemon supports multiple Qdrant servers simultaneously. Project config overrides user config.
-- Memories are automatically scoped to the current project (detected from git remote or folder name)
-- Omit QDRANT_API_KEY from env if not needed
+- The MCP talks to the REST API. It does not connect directly to Qdrant.
+- New memories are stored in the current project by default, detected from git remote or folder name.
+- Search defaults to all projects the API key can access. Pass `project` to filter.
 - Memories decay over 30 days if not accessed — frequently used memories persist longer

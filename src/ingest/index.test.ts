@@ -83,7 +83,6 @@ describe('ingestClaudeCodeTranscript', () => {
       id: 'existing-id',
       title: candidate.title,
       text: candidate.text,
-      project: 'memory-mcp',
     });
   });
 

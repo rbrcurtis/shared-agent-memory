@@ -108,7 +108,7 @@ export async function startServer(): Promise<void> {
   const qdrantApiKey = process.env['QDRANT_API_KEY'];
   const collectionName = process.env['COLLECTION_NAME'] ?? 'shared_agent_memory';
   const apiKeysJson = process.env['API_KEYS'] ?? '';
-  const port = parseInt(process.env['PORT'] ?? '3000', 10);
+  const port = parseInt(process.env['PORT'] ?? '3100', 10);
 
   if (!qdrantUrl) {
     console.error('QDRANT_URL environment variable is required');

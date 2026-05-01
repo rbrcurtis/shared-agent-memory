@@ -4,6 +4,7 @@ import type { AppConfig } from '../server.js';
 import type { FastifyInstance } from 'fastify';
 
 const QDRANT_URL = process.env['QDRANT_URL'] || 'http://localhost:6333';
+const QDRANT_API_KEY = process.env['QDRANT_API_KEY'];
 const TEST_KEY = 'sm_test_integration_key';
 const TEST_KEY_RESTRICTED = 'sm_test_restricted_key';
 const TEST_COLLECTION = `test_api_${Date.now()}`;
@@ -15,6 +16,7 @@ const apiKeysJson = JSON.stringify([
 
 let app: FastifyInstance;
 let storedMemoryId: string;
+let allowedMemoryId: string;
 
 function authHeader(key = TEST_KEY): Record<string, string> {
   return { authorization: `Bearer ${key}` };
@@ -23,6 +25,7 @@ function authHeader(key = TEST_KEY): Record<string, string> {
 beforeAll(async () => {
   const config: AppConfig = {
     qdrantUrl: QDRANT_URL,
+    qdrantApiKey: QDRANT_API_KEY,
     collectionName: TEST_COLLECTION,
     apiKeysJson,
     port: 0,
@@ -109,6 +112,41 @@ describe('POST /api/v1/memories', () => {
     storedMemoryId = body.data.id;
   });
 
+  it('stores a memory in a second project', async () => {
+    if (!app) return;
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/memories',
+      headers: { ...authHeader(), 'content-type': 'application/json' },
+      payload: JSON.stringify({
+        text: 'Vitest allowed project memory content',
+        title: 'Allowed Project Memory',
+        project: 'allowed-project',
+        tags: ['test'],
+      }),
+    });
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{ data: { id: string } }>();
+    expect(body.data.id).toBeTruthy();
+    allowedMemoryId = body.data.id;
+  });
+
+  it('requires a project when storing directly through the API', async () => {
+    if (!app) return;
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/memories',
+      headers: { ...authHeader(), 'content-type': 'application/json' },
+      payload: JSON.stringify({
+        text: 'Project missing direct API memory',
+        title: 'Missing Project',
+      }),
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
   it('rejects secrets in text', async () => {
     if (!app) return;
 
@@ -158,6 +196,35 @@ describe('GET /api/v1/memories/search', () => {
     const ids = body.data.map(r => r.id);
     expect(ids).toContain(storedMemoryId);
   });
+
+  it('searches all projects when project is omitted', async () => {
+    if (!app) return;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/memories/search?query=vitest+memory+content&limit=10',
+      headers: authHeader(),
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ data: Array<{ id: string; project: string }> }>();
+    const byId = new Map(body.data.map(r => [r.id, r.project]));
+    expect(byId.get(storedMemoryId)).toBe('test-project');
+    expect(byId.get(allowedMemoryId)).toBe('allowed-project');
+  });
+
+  it('includes project on filtered search results', async () => {
+    if (!app) return;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/memories/search?query=integration+test+memory&project=test-project',
+      headers: authHeader(),
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ data: Array<{ id: string; project: string }> }>();
+    const result = body.data.find(r => r.id === storedMemoryId);
+    expect(result?.project).toBe('test-project');
+  });
 });
 
 describe('GET /api/v1/memories/load', () => {
@@ -166,7 +233,7 @@ describe('GET /api/v1/memories/load', () => {
 
     const res = await app.inject({
       method: 'GET',
-      url: `/api/v1/memories/load?ids=${storedMemoryId}&project=*`,
+      url: `/api/v1/memories/load?ids=${storedMemoryId}`,
       headers: authHeader(),
     });
     expect(res.statusCode).toBe(200);
@@ -189,6 +256,21 @@ describe('GET /api/v1/memories/recent', () => {
     const body = res.json<{ data: Array<{ id: string }> }>();
     expect(body.data.length).toBeGreaterThan(0);
   });
+
+  it('lists all accessible projects when project is omitted', async () => {
+    if (!app) return;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/memories/recent?limit=10',
+      headers: authHeader(),
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ data: Array<{ id: string; project: string }> }>();
+    const byId = new Map(body.data.map(r => [r.id, r.project]));
+    expect(byId.get(storedMemoryId)).toBe('test-project');
+    expect(byId.get(allowedMemoryId)).toBe('allowed-project');
+  });
 });
 
 describe('Restricted key access', () => {
@@ -201,6 +283,22 @@ describe('Restricted key access', () => {
       headers: authHeader(TEST_KEY_RESTRICTED),
     });
     expect(res.statusCode).toBe(403);
+  });
+
+  it('omitted project only searches allowed projects for restricted keys', async () => {
+    if (!app) return;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/memories/search?query=vitest+memory+content&limit=10',
+      headers: authHeader(TEST_KEY_RESTRICTED),
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ data: Array<{ id: string; project: string }> }>();
+    const ids = body.data.map(r => r.id);
+    expect(ids).toContain(allowedMemoryId);
+    expect(ids).not.toContain(storedMemoryId);
+    expect(body.data.every(r => r.project === 'allowed-project')).toBe(true);
   });
 });
 
@@ -243,5 +341,16 @@ describe('DELETE /api/v1/memories/:id', () => {
       headers: authHeader(),
     });
     expect(res.statusCode).toBe(404);
+  });
+
+  it('deletes second project memory', async () => {
+    if (!app) return;
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/memories/${allowedMemoryId}`,
+      headers: authHeader(),
+    });
+    expect(res.statusCode).toBe(200);
   });
 });

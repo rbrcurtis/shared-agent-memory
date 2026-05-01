@@ -1,0 +1,48 @@
+{
+  "name": "shared-agent-memory",
+  "displayName": "Shared Agent Memory",
+  "description": "API-backed MCP server for shared AI agent memory across Claude Code sessions and projects.",
+  "version": "0.2.0",
+  "author": {
+    "name": "Ryan Curtis",
+    "email": "wednesday@gmail.com"
+  },
+  "homepage": "https://github.com/rbrcurtis/shared-agent-memory",
+  "repository": "https://github.com/rbrcurtis/shared-agent-memory",
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "memory",
+    "agents",
+    "qdrant",
+    "claude-code"
+  ],
+  "userConfig": {
+    "memory_api_url": {
+      "type": "string",
+      "title": "Memory API URL",
+      "description": "Base URL for the shared-agent-memory REST API.",
+      "default": "http://localhost:3100",
+      "required": true
+    },
+    "memory_api_key": {
+      "type": "string",
+      "title": "Memory API key",
+      "description": "Bearer token for the shared-agent-memory REST API.",
+      "sensitive": true,
+      "required": true
+    },
+    "default_agent": {
+      "type": "string",
+      "title": "Default agent",
+      "description": "Agent name stored on new memories when the tool call does not provide one.",
+      "default": "claude-code"
+    },
+    "default_project": {
+      "type": "string",
+      "title": "Default project override",
+      "description": "Optional project name for new memories. Leave empty to detect from the current git repo or folder.",
+      "default": ""
+    }
+  }
+}

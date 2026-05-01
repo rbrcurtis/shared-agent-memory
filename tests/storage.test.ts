@@ -24,6 +24,7 @@ describe.skipIf(!process.env.QDRANT_URL)('StorageService', () => {
   it('stores and retrieves a memory', async () => {
     const id = await storage.store({
       text: 'The API uses REST endpoints',
+      title: 'REST API Endpoints',
       vector: new Array(384).fill(0.1),
       agent: 'claude-code',
       project: 'my-project',
@@ -37,6 +38,7 @@ describe.skipIf(!process.env.QDRANT_URL)('StorageService', () => {
   it('searches memories by vector', async () => {
     const results = await storage.search({
       vector: new Array(384).fill(0.1),
+      queryText: 'REST endpoints',
       limit: 5,
     });
 
@@ -48,6 +50,7 @@ describe.skipIf(!process.env.QDRANT_URL)('StorageService', () => {
   it('filters search by agent', async () => {
     await storage.store({
       text: 'Memory from specific agent',
+      title: 'Specific Agent',
       vector: new Array(384).fill(0.2),
       agent: 'unique-agent',
       project: 'my-project',
@@ -56,6 +59,7 @@ describe.skipIf(!process.env.QDRANT_URL)('StorageService', () => {
 
     const results = await storage.search({
       vector: new Array(384).fill(0.2),
+      queryText: 'specific agent',
       limit: 10,
       agent: 'unique-agent',
     });
@@ -67,6 +71,7 @@ describe.skipIf(!process.env.QDRANT_URL)('StorageService', () => {
   it('filters search by project', async () => {
     await storage.store({
       text: 'Memory from specific project',
+      title: 'Specific Project',
       vector: new Array(384).fill(0.3),
       agent: 'test-agent',
       project: 'unique-project',
@@ -75,6 +80,7 @@ describe.skipIf(!process.env.QDRANT_URL)('StorageService', () => {
 
     const results = await storage.search({
       vector: new Array(384).fill(0.3),
+      queryText: 'specific project',
       limit: 10,
       project: 'unique-project',
     });
@@ -86,6 +92,7 @@ describe.skipIf(!process.env.QDRANT_URL)('StorageService', () => {
   it('filters search by tags', async () => {
     await storage.store({
       text: 'Memory with specific tags',
+      title: 'Specific Tags',
       vector: new Array(384).fill(0.4),
       agent: 'test-agent',
       project: 'test-project',
@@ -94,6 +101,7 @@ describe.skipIf(!process.env.QDRANT_URL)('StorageService', () => {
 
     const results = await storage.search({
       vector: new Array(384).fill(0.4),
+      queryText: 'specific tags',
       limit: 10,
       tags: ['unique-tag'],
     });
@@ -112,6 +120,7 @@ describe.skipIf(!process.env.QDRANT_URL)('StorageService', () => {
   it('deletes a memory', async () => {
     const id = await storage.store({
       text: 'Memory to delete',
+      title: 'Delete Memory',
       vector: new Array(384).fill(0.5),
       agent: 'test-agent',
       project: 'test-project',

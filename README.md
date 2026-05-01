@@ -7,75 +7,113 @@ MCP server enabling multiple AI agents to share persistent memory via Qdrant.
 - **Hybrid search** — dense vector similarity (all-MiniLM-L6-v2) + BM25 keyword matching, fused with Reciprocal Rank Fusion
 - **Ebbinghaus forgetting curve** — memories decay over time; frequently-accessed memories persist, unused ones fade and get tombstoned after ~6 months
 - **Secret filtering** — four-layer detection (known token prefixes, high-entropy strings, credential assignment, keyword proximity) rejects memories containing API keys, tokens, or credentials
-- **REST API** — authenticated Fastify server with Swagger UI for non-MCP clients
+- **REST API** — authenticated Fastify server with Swagger UI; MCP clients use this API too
 - **Memory browser** — standalone web UI for browsing, searching, editing, and deleting memories directly via Qdrant's REST API
-- **Multi-agent / multi-Qdrant** — multiple AI agents share the same memory store; different projects can point to different Qdrant instances
+- **Multi-agent memory** — multiple AI agents share the same memory store through one API
 - **Two-step search** — returns titles first for context efficiency, then loads full text on demand
 - **Local embeddings** — all-MiniLM-L6-v2 runs locally, zero external API costs
-- **Daemon architecture** — long-running process keeps embedding model warm; auto-starts on first request, shuts down after idle timeout
+- **API-backed MCP** — MCP tools call the REST API directly; no background MCP daemon
 
 ## Claude Code Setup
 
-Paste this into Claude Code:
+### Marketplace Install
 
-```
-Read https://raw.githubusercontent.com/rbrcurtis/shared-agent-memory/main/CLAUDE_INSTRUCTIONS.md and follow the setup instructions.
-```
-
-### Manual Installation
+Install the Claude Code marketplace and plugin:
 
 ```bash
-# Clone to your preferred location
-git clone https://github.com/rbrcurtis/shared-agent-memory.git <PATH>
-cd <PATH>
-npm install
-npm run build
+curl -fsSL https://raw.githubusercontent.com/rbrcurtis/shared-agent-memory/main/install.sh | bash
+```
 
-# Project-level (recommended) - add to current project's .mcp.json
-claude mcp add-json shared-memory '{
-  "type": "stdio",
-  "command": "node",
-  "args": ["<PATH>/dist/index.js"],
-  "env": {
-    "QDRANT_URL": "http://localhost:6333",
-    "DEFAULT_AGENT": "claude-code"
-  }
-}'
+For project scope:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rbrcurtis/shared-agent-memory/main/install.sh | SCOPE=project bash
+```
+
+Or from a checkout:
+
+```bash
+git clone https://github.com/rbrcurtis/shared-agent-memory.git
+cd shared-agent-memory
+scripts/setup-claude-code.sh
+```
+
+Claude Code will prompt for:
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `memory_api_url` | Shared memory API base URL | `http://localhost:3100` |
+| `memory_api_key` | Bearer token for the memory API | required |
+| `default_agent` | Agent stored on new memories | `claude-code` |
+| `default_project` | Optional project override for new memories | auto-detect |
+
+For local marketplace testing from this checkout:
+
+```bash
+scripts/setup-claude-code.sh --local
+```
+
+For an internal fork or mirror:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rbrcurtis/shared-agent-memory/main/install.sh | SOURCE=github-org/shared-agent-memory bash
+```
+
+Manual CLI equivalent:
+
+```bash
+claude plugin marketplace add rbrcurtis/shared-agent-memory
+claude plugin install shared-agent-memory@shared-agent-memory
 ```
 
 ### Installation Scope
 
 | Scope | Flag | Config File | Use Case |
 |-------|------|-------------|----------|
-| Project | (default) | `.mcp.json` | Different Qdrant per project |
-| User | `-s user` | `~/.claude.json` | Shared Qdrant for all projects |
+| User | `--scope user` | Claude user settings | Shared memory API for all projects |
+| Project | `--scope project` | Project Claude settings | Team/project install |
+| Local | `--scope local` | Local Claude settings | Machine-local test install |
 
-**Multi-Qdrant Setup**: The daemon supports multiple Qdrant servers simultaneously. Configure different servers per project:
+The setup script defaults to user scope. Pass `--scope project` or `--scope local` when needed:
 
 ```bash
-# Work projects - uses company Qdrant
-cd ~/work/api && claude mcp add-json shared-memory '{
-  "env": { "QDRANT_URL": "https://qdrant.company.com", "QDRANT_API_KEY": "..." }
-}'
+scripts/setup-claude-code.sh --scope project
+```
 
-# Personal projects - uses local Qdrant
-cd ~/projects/app && claude mcp add-json shared-memory '{
-  "env": { "QDRANT_URL": "http://localhost:6333" }
+### Direct MCP Fallback
+
+The marketplace plugin is preferred. For a one-off direct MCP install:
+
+```bash
+git clone https://github.com/rbrcurtis/shared-agent-memory.git <PATH>
+cd <PATH>
+npm install
+npm run build
+
+claude mcp add-json shared-memory '{
+  "type": "stdio",
+  "command": "node",
+  "args": ["<PATH>/dist/index.js"],
+  "env": {
+    "MEMORY_API_URL": "http://localhost:3100",
+    "MEMORY_API_KEY": "your-bearer-token",
+    "DEFAULT_AGENT": "claude-code"
+  }
 }'
 ```
 
-Project `.mcp.json` overrides user `~/.claude.json` when both exist.
+The MCP server talks to the REST API. It does not start Qdrant and does not run a background daemon.
 
 ## Project Scoping
 
-Memories are automatically scoped to the current project to prevent cross-project pollution. The project name is determined by:
+New memories are stored in the current project by default. The MCP server determines the default project by:
 
 1. **Git remote** (preferred): Extracted from `git remote get-url origin`
    - `https://github.com/user/my-app.git` → `my-app`
    - `git@bitbucket.org:team/backend.git` → `backend`
 2. **Folder name** (fallback): Used when not in a git repo
 
-This means memories stored while working on `my-app` are only visible when working in that repo, regardless of the local folder name.
+Search defaults to all projects the API key can access. Pass `project` to `search_memory` or `/api/v1/memories/search` to filter to a single project. Search results include the project name so callers can see where each memory came from.
 
 ## Agent Instructions
 
@@ -116,20 +154,17 @@ For consistent memory usage, add instructions to **both** `~/.claude/CLAUDE.md` 
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `QDRANT_URL` | Qdrant server URL | `http://localhost:6333` |
-| `QDRANT_API_KEY` | API key for Qdrant | none |
-| `COLLECTION_NAME` | Qdrant collection name | `shared_agent_memory` |
+| `MEMORY_API_URL` | Memory API base URL for MCP clients | `http://localhost:3100` |
+| `MEMORY_API_KEY` | Bearer token for MCP clients | required |
 | `DEFAULT_AGENT` | Default agent identifier | `unknown` |
 | `DEFAULT_PROJECT` | Override auto-detected project | git repo name or folder |
-| `DAEMON_IDLE_TIMEOUT` | Daemon shutdown after N seconds idle | `7200` (2 hours) |
 
 ### CLI Arguments
 
 ```bash
 node dist/index.js \
-  --qdrant-url http://your-qdrant:6333 \
-  --api-key YOUR_KEY \
-  --collection my_memories \
+  --memory-api-url http://localhost:3100 \
+  --memory-api-key YOUR_KEY \
   --agent claude-code
 ```
 
@@ -138,12 +173,12 @@ node dist/index.js \
 | Tool | Description |
 |------|-------------|
 | `store_memory` | Store text with a title, generates embedding automatically |
-| `search_memory` | Semantic search — returns titles and IDs only |
+| `search_memory` | Semantic search across all accessible projects by default — returns titles, IDs, projects, and scores |
 | `load_memories` | Load full text by IDs, reinforces loaded memories |
-| `list_recent` | List recent memories — returns titles and IDs |
+| `list_recent` | List recent memories across all accessible projects by default — returns titles, IDs, and projects |
 | `update_memory` | Update existing memory with new text and title |
 | `delete_memory` | Remove a memory by ID |
-| `get_config` | Show current configuration and daemon status |
+| `get_config` | Show current MCP/API configuration |
 
 ### Two-Step Search
 
@@ -172,18 +207,18 @@ A Fastify-based HTTP server for non-MCP clients, with OpenAPI spec and Swagger U
 
 ```bash
 # Run directly
-PORT=3000 QDRANT_URL=http://localhost:6333 node dist/api/server.js
+PORT=3100 QDRANT_URL=http://localhost:6333 node dist/api/server.js
 
 # Or via Docker
 docker build -t shared-agent-memory .
-docker run -p 3000:3000 \
+docker run -p 3100:3100 \
   -e QDRANT_URL=http://your-qdrant:6333 \
   -e QDRANT_API_KEY=optional \
   -e API_KEYS='[{"key":"your-bearer-token","name":"my-service","projects":null}]' \
   shared-agent-memory
 ```
 
-Swagger UI available at `http://localhost:3000/docs`.
+Swagger UI available at `http://localhost:3100/docs`.
 
 ### Authentication
 
@@ -277,7 +312,7 @@ Four detection layers, applied in order:
 
 False positive filtering skips code identifiers (camelCase), file paths, kebab-case strings, and MongoDB ObjectIDs.
 
-Applied to both `store_memory` and `update_memory` at the daemon level, covering all clients.
+Applied to both `store_memory` and `update_memory` at the API level, covering all clients.
 
 ## Memory Browser
 
@@ -300,29 +335,18 @@ For Kubernetes deployment, see `k8s/` directory (nginx serving static files via 
 
 ```
 Agent 1 (Claude Code) ──┐
-                        ├── MCP Wrapper ── Unix Socket ── Daemon ── Qdrant
-Agent 2 (Cursor)     ──┘                   /tmp/shared-memory.sock
+                        ├── MCP Wrapper ── REST API (Fastify) ── Qdrant
+Agent 2 (Cursor)     ──┘                   localhost:3100
 
 External Service ────── REST API (Fastify) ── Qdrant
-                        localhost:3000
+                        localhost:3100
 ```
 
-The daemon architecture keeps the embedding model loaded in memory for fast responses:
+The API process keeps the embedding model loaded in memory for fast responses:
 
-- **MCP Wrapper** (`index.ts`): Thin stdio server that forwards tool calls
-- **Daemon** (`daemon.ts`): Long-running process holding the model, listens on Unix socket
-- **Client** (`client.ts`): Auto-starts daemon on first request, handles reconnection
-- **REST API** (`api/server.ts`): Standalone Fastify server for HTTP access, shares storage and embedding code with the daemon
-
-### Daemon Behavior
-
-| Feature | Behavior |
-|---------|----------|
-| Socket path | `/tmp/shared-memory.sock` (Linux/Mac), `\\.\pipe\shared-memory` (Windows) |
-| Auto-start | Client spawns daemon on first connection if not running |
-| Idle timeout | Shuts down after 2 hours of inactivity (configurable) |
-| Model loading | Pre-warms on startup, ~100ms for subsequent requests |
-| Logs | `/tmp/shared-memory-daemon.log` |
+- **MCP Wrapper** (`index.ts`): Thin stdio server that exposes memory tools
+- **Client** (`client.ts`): HTTP client for the REST API
+- **REST API** (`api/server.ts`): Fastify server for memory operations and embedding generation
 
 Embeddings generated locally using `all-MiniLM-L6-v2` (384 dimensions). Zero external API costs.
 
@@ -330,13 +354,13 @@ Embeddings generated locally using `all-MiniLM-L6-v2` (384 dimensions). Zero ext
 
 ```bash
 docker build -t shared-agent-memory .
-docker run -p 3000:3000 \
+docker run -p 3100:3100 \
   -e QDRANT_URL=http://host.docker.internal:6333 \
   -e API_KEYS='[{"key":"your-token","name":"default","projects":null}]' \
   shared-agent-memory
 ```
 
-The Docker image runs the REST API server. For the MCP server, run `node dist/index.js` directly (it uses stdio, not HTTP).
+The Docker image runs the REST API server. For the MCP server, run `node dist/index.js` directly; it uses stdio for MCP and HTTP for memory operations.
 
 ## License
 
