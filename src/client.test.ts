@@ -134,6 +134,9 @@ describe('memory API client', () => {
 
     expect(calls[0].url).toBe('http://memory.example.test/api/v1/memories/mem-1');
     expect(calls[0].init?.method).toBe('DELETE');
+    expect(calls[0].init?.headers).toMatchObject({ Authorization: 'Bearer test-api-key' });
+    expect(calls[0].init?.headers).not.toHaveProperty('Content-Type');
+    expect(calls[0].init?.body).toBeUndefined();
   });
 
   it('reports API config with resolved API base URL', async () => {

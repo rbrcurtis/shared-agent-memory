@@ -46,13 +46,18 @@ async function request<T>(
 
   const query = options.query ? encodeQuery(options.query) : '';
   const url = `${getApiBaseUrl()}${path}${query ? `?${query}` : ''}`;
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${apiKey}`,
+  };
+  const body = options.body ? JSON.stringify(options.body) : undefined;
+  if (body) {
+    headers['Content-Type'] = 'application/json';
+  }
+
   const res = await fetch(url, {
     method,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
+    headers,
+    body,
   });
 
   const text = await res.text();
