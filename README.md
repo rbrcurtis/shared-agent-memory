@@ -53,6 +53,19 @@ For local marketplace testing from this checkout:
 scripts/setup-claude-code.sh --local
 ```
 
+For project-level setup with shared team configuration:
+
+```bash
+scripts/setup-claude-code.sh \
+  --scope project \
+  --memory-api-url https://memory.example.com \
+  --memory-api-key TEAM_API_KEY \
+  --default-agent claude-code \
+  --default-project my-project
+```
+
+This writes the plugin enablement and `pluginConfigs` values to `.claude/settings.json` in the target repo. Commit that file only when the API key is intentionally shared with the team.
+
 For an internal fork or mirror:
 
 ```bash
@@ -106,14 +119,14 @@ The MCP server talks to the REST API. It does not start Qdrant and does not run 
 
 ## Project Scoping
 
-New memories are stored in the current project by default. The MCP server determines the default project by:
+MCP `store_memory` stores new memories in the detected current project when `project` is omitted. Agents may pass `project` only when deliberately saving knowledge for a different related repo. The MCP server determines the default project by:
 
 1. **Git remote** (preferred): Extracted from `git remote get-url origin`
    - `https://github.com/user/my-app.git` → `my-app`
    - `git@bitbucket.org:team/backend.git` → `backend`
 2. **Folder name** (fallback): Used when not in a git repo
 
-Search defaults to all projects the API key can access. Pass `project` to `search_memory` or `/api/v1/memories/search` to filter to a single project. Search results include the project name so callers can see where each memory came from.
+Search and recent-listing default to all projects the API key can access. Pass `project` to `search_memory`, `list_recent`, or the REST API endpoints to filter to a single project. Search results include the project name so callers can see where each memory came from.
 
 ## Agent Instructions
 
@@ -246,10 +259,20 @@ Bearer token via the `API_KEYS` environment variable (JSON array):
 | GET | `/api/v1/memories/search` | Search with retention re-ranking |
 | GET | `/api/v1/memories/load` | Load full text by IDs, reinforce |
 | GET | `/api/v1/memories/recent` | List recent by creation date |
+| GET | `/api/v1/memories/:id/audit` | List audit events for a memory |
 | PUT | `/api/v1/memories/:id` | Update a memory |
 | DELETE | `/api/v1/memories/:id` | Delete a memory |
 | GET | `/api/v1/config` | Server config and model status |
 | GET | `/docs` | Swagger UI (no auth) |
+
+### Audit Metadata
+
+Each memory stores current audit metadata in its payload:
+
+- `createdAt` / `updatedAt`
+- `createdBy` / `updatedBy`
+
+The actor fields use the matching API key's `name`. Create, update, and delete operations also write append-only audit events to a companion Qdrant collection named `<collection>_audit`.
 
 ## Ebbinghaus Forgetting Curve
 

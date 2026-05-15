@@ -18,6 +18,7 @@ import {
   recentResponse,
   updateMemoryBody,
   memoryIdParams,
+  auditResponse,
   successResponse,
   errorResponse,
 } from '../schemas/memory.js';
@@ -94,6 +95,7 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
       agent: agent || 'unknown',
       project: resolvedProject,
       tags: userTags,
+      actor: key.name,
     });
 
     // Fire-and-forget: extract entities and merge into tags
@@ -318,6 +320,11 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
         created_at: r.created_at,
         last_accessed: r.last_accessed,
         access_count: r.access_count,
+        updated_at: r.updated_at,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+        createdBy: r.createdBy,
+        updatedBy: r.updatedBy,
       })),
     });
   });
@@ -375,8 +382,57 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
         title: r.title,
         project: r.project,
         created_at: r.created_at,
+        updated_at: r.updated_at,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+        createdBy: r.createdBy,
+        updatedBy: r.updatedBy,
       })),
     });
+  });
+
+  // GET /api/v1/memories/:id/audit — List audit events for a memory
+  app.get('/api/v1/memories/:id/audit', {
+    schema: {
+      tags: ['memories'],
+      summary: 'List audit events for a memory',
+      security: [{ bearerAuth: [] }],
+      params: memoryIdParams,
+      response: {
+        200: auditResponse,
+        403: errorResponse,
+        404: errorResponse,
+      },
+    },
+  }, async (
+    request: FastifyRequest<{
+      Params: { id: string };
+    }>,
+    reply: FastifyReply,
+  ) => {
+    const key: ApiKeyConfig = request.apiKey;
+    const { id } = request.params;
+
+    const events = await storage.listAudit(id);
+    if (events.length > 0) {
+      const allowedEvents = events.filter(event => checkProjectAccess(key, event.project));
+      if (allowedEvents.length === 0) {
+        return sendError(reply, 403, 'Access denied for project');
+      }
+      return reply.code(200).send({ data: allowedEvents });
+    }
+
+    const existing = await storage.getByIds([id]);
+    if (existing.length === 0) {
+      return sendError(reply, 404, 'Memory not found');
+    }
+
+    const mem = existing[0];
+    if (!checkProjectAccess(key, mem.project)) {
+      return sendError(reply, 403, 'Access denied for project');
+    }
+
+    return reply.code(200).send({ data: events });
   });
 
   // PUT /api/v1/memories/:id — Update with fetch-then-check
@@ -437,6 +493,11 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
       agent: mem.agent,
       project: mem.project,
       tags: existingTags,
+      actor: key.name,
+      createdAt: mem.createdAt || mem.created_at,
+      createdBy: mem.createdBy,
+      accessCount: mem.access_count,
+      stability: mem.stability,
     });
 
     // Fire-and-forget: re-extract entities and merge into tags
@@ -487,7 +548,7 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
       return sendError(reply, 403, 'Access denied for project');
     }
 
-    await storage.delete(id);
+    await storage.delete(id, key.name, mem);
 
     return reply.code(200).send({ data: { success: true } });
   });

@@ -29,6 +29,18 @@ cd shared-agent-memory
 scripts/setup-claude-code.sh
 ```
 
+For a project-level team install with shared config:
+```bash
+scripts/setup-claude-code.sh \
+  --scope project \
+  --memory-api-url https://memory.example.com \
+  --memory-api-key TEAM_API_KEY \
+  --default-agent claude-code \
+  --default-project my-project
+```
+
+This writes `.claude/settings.json` in the target repo. Commit it only when the API key is intentionally shared with that team.
+
 2. When prompted, enter:
 - `memory_api_url`: memory API base URL
 - `memory_api_key`: API bearer token
@@ -40,10 +52,10 @@ scripts/setup-claude-code.sh
 ## Verification
 
 After restarting, these tools should be available:
-- `store_memory` - Store text with a title and automatic embedding
-- `search_memory` - Semantic search, returns titles and IDs only
+- `store_memory` - Store text in the detected current project by default; pass `project` only for a different related repo
+- `search_memory` - Semantic search across all accessible projects by default; pass `project` to filter
 - `load_memories` - Load full text for selected memory IDs (use after search)
-- `list_recent` - List recent memories (titles and IDs)
+- `list_recent` - List recent memories across all accessible projects by default; pass `project` to filter
 - `update_memory` - Update existing memory
 - `delete_memory` - Remove a memory by ID
 - `get_config` - Show current MCP/API configuration
@@ -71,6 +83,6 @@ When calling `store_memory`, always provide both `title` and `text`:
 ## Notes
 
 - The MCP talks to the REST API. It does not connect directly to Qdrant.
-- New memories are stored in the current project by default, detected from git remote or folder name.
-- Search defaults to all projects the API key can access. Pass `project` to filter.
+- New memories default to the detected current project, based on git remote or folder name. Pass `project` only when saving knowledge for a different related repo.
+- Search and recent lists default to all projects the API key can access. Pass `project` to filter.
 - Memories decay over 30 days if not accessed — frequently used memories persist longer

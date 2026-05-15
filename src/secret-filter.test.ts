@@ -165,7 +165,7 @@ describe('detectSecrets -- Layer 2: long high-entropy strings', () => {
   });
 
   it('detects base64 with plus and slash chars', () => {
-    const r = detectSecrets('secret: 9l/vD27d9W20zA0If1/k798wx4dGOrHU7oBHhNdaWlA=');
+    const r = detectSecrets('secret: aA/bB12cC34dD56eE78fF90gG12hH34iI56jJ78kK=');
     expect(r).not.toBeNull();
     expect(r!.rule).toBe('high-entropy-base64');
   });

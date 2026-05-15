@@ -120,14 +120,14 @@ async function main(): Promise<void> {
     tools: [
       {
         name: 'store_memory',
-        description: 'Store a memory (REQUIRED params: title, text). Title is a short descriptive label (max 10 words). Text is the full memory content.',
+        description: 'Store a memory in the detected current git project by default. REQUIRED params: title, text. Pass project only when deliberately saving knowledge for a different related repo.',
         inputSchema: {
           type: 'object',
           properties: {
             text: { type: 'string', description: 'The memory content to store' },
             title: { type: 'string', description: 'Short descriptive title for the memory (max 10 words)' },
             agent: { type: 'string', description: 'Agent identifier (e.g., claude-code, cursor)' },
-            project: { type: 'string', description: 'Project to store in (defaults to current project)' },
+            project: { type: 'string', description: 'Optional project override. Omit to store in the detected current git project.' },
             tags: { type: 'array', items: { type: 'string' }, description: 'Tags for categorization' },
           },
           required: ['text', 'title'],

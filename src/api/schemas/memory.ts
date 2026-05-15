@@ -90,9 +90,39 @@ export const memoryDetail = {
     project: { type: "string" },
     tags: { type: "array", items: { type: "string" } },
     created_at: { type: "string", format: "date-time" },
+    updated_at: { type: "string", format: "date-time" },
+    createdAt: { type: "string", format: "date-time" },
+    updatedAt: { type: "string", format: "date-time" },
+    createdBy: { type: "string" },
+    updatedBy: { type: "string" },
     last_accessed: { type: "string", format: "date-time" },
     access_count: { type: "integer" },
   },
+} as const;
+
+export const auditEvent = {
+  type: "object",
+  properties: {
+    id: { type: "string", format: "uuid" },
+    memoryId: { type: "string", format: "uuid" },
+    action: { type: "string", enum: ["create", "update", "delete"] },
+    actor: { type: "string" },
+    project: { type: "string" },
+    timestamp: { type: "string", format: "date-time" },
+    title: { type: "string" },
+  },
+  required: ["id", "memoryId", "action", "actor", "project", "timestamp"],
+} as const;
+
+export const auditResponse = {
+  type: "object",
+  properties: {
+    data: {
+      type: "array",
+      items: auditEvent,
+    },
+  },
+  required: ["data"],
 } as const;
 
 export const loadResponse = {
@@ -127,6 +157,11 @@ export const recentResponse = {
           title: { type: "string" },
           project: { type: "string" },
           created_at: { type: "string", format: "date-time" },
+          updated_at: { type: "string", format: "date-time" },
+          createdAt: { type: "string", format: "date-time" },
+          updatedAt: { type: "string", format: "date-time" },
+          createdBy: { type: "string" },
+          updatedBy: { type: "string" },
         },
         required: ["id", "title", "project", "created_at"],
       },

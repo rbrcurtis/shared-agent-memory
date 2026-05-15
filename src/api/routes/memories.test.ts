@@ -237,9 +237,36 @@ describe('GET /api/v1/memories/load', () => {
       headers: authHeader(),
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ data: Array<{ id: string; text: string }> }>();
+    const body = res.json<{ data: Array<{ id: string; text: string; createdBy: string; updatedBy: string; createdAt: string; updatedAt: string }> }>();
     expect(body.data.length).toBeGreaterThan(0);
     expect(body.data[0].text).toContain('integration test memory');
+    expect(body.data[0].createdBy).toBe('test-full');
+    expect(body.data[0].updatedBy).toBe('test-full');
+    expect(body.data[0].createdAt).toBeTruthy();
+    expect(body.data[0].updatedAt).toBeTruthy();
+  });
+});
+
+describe('GET /api/v1/memories/:id/audit', () => {
+  it('returns audit events for stored memory', async () => {
+    if (!app) return;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/memories/${storedMemoryId}/audit`,
+      headers: authHeader(),
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ data: Array<{ action: string; actor: string; memoryId: string }> }>();
+    expect(body.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: 'create',
+          actor: 'test-full',
+          memoryId: storedMemoryId,
+        }),
+      ]),
+    );
   });
 });
 
@@ -315,6 +342,19 @@ describe('PUT /api/v1/memories/:id', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json<{ data: { success: boolean } }>();
     expect(body.data.success).toBe(true);
+
+    const auditRes = await app.inject({
+      method: 'GET',
+      url: `/api/v1/memories/${storedMemoryId}/audit`,
+      headers: authHeader(),
+    });
+    expect(auditRes.statusCode).toBe(200);
+    const auditBody = auditRes.json<{ data: Array<{ action: string; actor: string }> }>();
+    expect(auditBody.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ action: 'update', actor: 'test-full' }),
+      ]),
+    );
   });
 });
 

@@ -6,6 +6,11 @@ export interface MemoryMetadata {
   project: string;
   tags: string[];
   created_at: string;
+  updated_at?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: string;
+  updatedBy?: string;
   last_accessed?: string;
   access_count?: number;
   stability?: number;
@@ -42,10 +47,25 @@ export interface SearchResult {
   project: string;
   tags: string[];
   created_at: string;
+  updated_at?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: string;
+  updatedBy?: string;
   last_accessed?: string;
   access_count?: number;
   stability?: number;
   retention?: number;
+}
+
+export interface AuditEvent {
+  id: string;
+  memoryId: string;
+  action: 'create' | 'update' | 'delete';
+  actor: string;
+  project: string;
+  timestamp: string;
+  title?: string;
 }
 
 export interface ServerConfig {
