@@ -10,6 +10,7 @@ import {
 
 let tempDir = "";
 let originalPluginData: string | undefined;
+let originalCodexPluginData: string | undefined;
 
 function writeTranscript(roles: string[]): string {
   const file = path.join(tempDir, "transcript.jsonl");
@@ -23,7 +24,9 @@ function writeTranscript(roles: string[]): string {
 beforeEach(() => {
   tempDir = fs.mkdtempSync(path.join(process.cwd(), ".tmp-memory-hook-"));
   originalPluginData = process.env["CLAUDE_PLUGIN_DATA"];
+  originalCodexPluginData = process.env["PLUGIN_DATA"];
   process.env["CLAUDE_PLUGIN_DATA"] = path.join(tempDir, "state");
+  delete process.env["PLUGIN_DATA"];
 });
 
 afterEach(() => {
@@ -31,6 +34,11 @@ afterEach(() => {
     delete process.env["CLAUDE_PLUGIN_DATA"];
   } else {
     process.env["CLAUDE_PLUGIN_DATA"] = originalPluginData;
+  }
+  if (originalCodexPluginData === undefined) {
+    delete process.env["PLUGIN_DATA"];
+  } else {
+    process.env["PLUGIN_DATA"] = originalCodexPluginData;
   }
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
@@ -111,5 +119,17 @@ describe("memory turn hook", () => {
     expect(buildHookResult(input)).toBeNull();
     expect(buildHookResult(input)).toBeNull();
     expect(buildHookResult(input)?.systemMessage).toBe(MEMORY_CAPTURE_PROMPT);
+  });
+
+  it("uses Codex plugin data for fallback state", () => {
+    delete process.env["CLAUDE_PLUGIN_DATA"];
+    process.env["PLUGIN_DATA"] = path.join(tempDir, "codex-state");
+
+    const input = { session_id: "codex-session" };
+
+    expect(buildHookResult(input)).toBeNull();
+    expect(
+      fs.existsSync(path.join(tempDir, "codex-state", "codex-session.json")),
+    ).toBe(true);
   });
 });

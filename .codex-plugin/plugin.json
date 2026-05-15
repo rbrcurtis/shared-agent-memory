@@ -1,0 +1,30 @@
+{
+  "name": "shared-agent-memory",
+  "description": "API-backed MCP server for shared AI agent memory across Codex, Claude Code, and team projects.",
+  "version": "0.2.3",
+  "author": {
+    "name": "Ryan Curtis",
+    "email": "wednesday@gmail.com"
+  },
+  "homepage": "https://github.com/rbrcurtis/shared-agent-memory",
+  "repository": "https://github.com/rbrcurtis/shared-agent-memory",
+  "license": "MIT",
+  "keywords": ["mcp", "memory", "agents", "rag", "codex"],
+  "mcpServers": "./.mcp.codex.json",
+  "hooks": "./hooks/hooks.json",
+  "interface": {
+    "displayName": "Shared Agent Memory",
+    "shortDescription": "Team memory RAG for coding agents",
+    "longDescription": "Shared Agent Memory gives Codex and other MCP clients a common searchable memory layer, with project-aware writes and a Stop hook that reminds agents to keep durable learnings current.",
+    "developerName": "Ryan Curtis",
+    "category": "Coding",
+    "capabilities": ["Interactive", "Read", "Write"],
+    "websiteURL": "https://github.com/rbrcurtis/shared-agent-memory",
+    "defaultPrompt": [
+      "Search shared memory before changing this repo.",
+      "Store durable architecture or workflow learnings in shared memory."
+    ],
+    "brandColor": "#2563EB",
+    "screenshots": []
+  }
+}

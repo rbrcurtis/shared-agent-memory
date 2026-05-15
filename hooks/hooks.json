@@ -3,12 +3,12 @@
   "hooks": {
     "Stop": [
       {
-        "matcher": "",
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/bin/shared-agent-memory --memory-turn-hook",
-            "timeout": 10
+            "command": "bash -lc 'root=\"${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}\"; test -n \"$root\"; exec \"$root/bin/shared-agent-memory\" --memory-turn-hook'",
+            "timeout": 10,
+            "statusMessage": "Checking shared memory updates"
           }
         ]
       }

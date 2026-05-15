@@ -131,6 +131,53 @@ claude mcp add-json shared-memory '{
 
 The MCP server talks to the REST API. It does not start Qdrant and does not run a background daemon.
 
+## Codex Setup
+
+Codex support ships as a native plugin manifest plus a repo-local marketplace:
+
+- `.codex-plugin/plugin.json` - Codex plugin metadata
+- `.agents/plugins/marketplace.json` - marketplace entry for this repo
+- `.mcp.codex.json` - bundled MCP server config
+- `hooks/hooks.json` - Codex `Stop` hook for memory capture
+
+Add this repo as a Codex marketplace:
+
+```bash
+codex plugin marketplace add rbrcurtis/shared-agent-memory
+```
+
+For local testing from this checkout:
+
+```bash
+codex plugin marketplace add "$(pwd)"
+```
+
+Then open `/plugins` in Codex, install **Shared Agent Memory**, and start a new thread. Bundled plugin hooks require:
+
+```bash
+codex features enable plugin_hooks
+```
+
+Codex hooks are otherwise enabled by default. If they were disabled locally, re-enable them:
+
+```bash
+codex features enable hooks
+```
+
+The Codex MCP config forwards `MEMORY_API_URL`, `MEMORY_API_KEY`, `DEFAULT_AGENT`, and `DEFAULT_PROJECT` from Codex's local environment. If you prefer explicit user config, keep a direct MCP entry in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.shared-memory]
+command = "/path/to/shared-agent-memory/bin/shared-agent-memory"
+startup_timeout_sec = 60
+
+[mcp_servers.shared-memory.env]
+MEMORY_API_URL = "http://localhost:3100"
+MEMORY_API_KEY = "your-bearer-token"
+DEFAULT_AGENT = "codex"
+DEFAULT_PROJECT = ""
+```
+
 ## Project Scoping
 
 MCP `store_memory` stores new memories in the detected current project when `project` is omitted. Agents may pass `project` only when deliberately saving knowledge for a different related repo. The MCP server determines the default project by:
@@ -144,13 +191,13 @@ Search and recent-listing default to all projects the API key can access. Pass `
 
 ## Agent Instructions
 
-The plugin automatically registers a Claude Code `Stop` hook from `.claude-plugin/hooks.json`. After assistant turns, the hook runs:
+The Claude Code and Codex plugins automatically register a `Stop` hook. After assistant turns, the hook runs the shared wrapper:
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/dist/hooks/memory-turn-hook.js
+bin/shared-agent-memory --memory-turn-hook
 ```
 
-The hook counts assistant turns from Claude's transcript when available, falls back to per-session state under `CLAUDE_PLUGIN_DATA`, and injects the canonical memory-capture prompt every fifth assistant turn. The prompt tells the active agent to:
+The hook counts assistant turns from the client transcript when available, falls back to per-session plugin data, and injects the canonical memory-capture prompt every fifth assistant turn. The prompt tells the active agent to:
 
 - Review the conversation for durable learnings
 - Search existing memories before writing

@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 set -ex
 
-ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-DATA="${CLAUDE_PLUGIN_DATA:-$ROOT/.plugin-data}"
+TARGET="index"
+if [ "${1:-}" = "--memory-turn-hook" ]; then
+  TARGET="hooks/memory-turn-hook"
+  shift
+fi
+
+ROOT="${SHARED_AGENT_MEMORY_PLUGIN_ROOT:-${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}}"
+DATA="${SHARED_AGENT_MEMORY_PLUGIN_DATA:-${PLUGIN_DATA:-${CLAUDE_PLUGIN_DATA:-$ROOT/.plugin-data}}}"
 RUNTIME="$DATA/runtime"
 STAMP="$RUNTIME/.source-sha256"
 
@@ -24,4 +30,4 @@ if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP")" != "$HASH" ] || [ ! -f "$RUNTIME/dis
   printf '%s\n' "$HASH" > "$STAMP"
 fi
 
-exec node "$RUNTIME/dist/index.js" "$@"
+exec node "$RUNTIME/dist/$TARGET.js" "$@"

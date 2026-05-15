@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "shared-memory": {
+      "command": "bash",
+      "args": [
+        "-lc",
+        "root=\"${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}\"; test -n \"$root\"; exec \"$root/bin/shared-agent-memory\""
+      ],
+      "env_vars": [
+        "MEMORY_API_URL",
+        "MEMORY_API_KEY",
+        "DEFAULT_AGENT",
+        "DEFAULT_PROJECT"
+      ],
+      "startup_timeout_sec": 60
+    }
+  }
+}

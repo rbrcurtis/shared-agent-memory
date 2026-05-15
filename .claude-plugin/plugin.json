@@ -1,7 +1,7 @@
 {
   "name": "shared-agent-memory",
   "description": "API-backed MCP server for shared AI agent memory across Claude Code sessions and projects.",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "author": {
     "name": "Ryan Curtis",
     "email": "wednesday@gmail.com"
