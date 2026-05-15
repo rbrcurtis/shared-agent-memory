@@ -1,9 +1,14 @@
 # Shared Agent Memory
 
-MCP server enabling multiple AI agents to share persistent memory via Qdrant.
+Self-updating RAG for teams of AI agents. Shared Agent Memory gives Claude Code and other MCP clients a common, searchable project memory backed by Qdrant, then nudges agents to keep that memory current as they work.
+
+Instead of every agent rediscovering the same repo patterns, infrastructure details, and troubleshooting history, teams get a shared retrieval layer that improves over time. Agents search the memory store before diving into files, load only the relevant full notes, and store or update durable learnings when the conversation reveals something worth preserving.
 
 ## Features
 
+- **Team RAG layer** — shared retrieval-augmented context across projects, repos, and agents
+- **Self-updating workflow** — Claude Code plugin ships a `Stop` hook that prompts memory curation every fifth assistant turn
+- **Project-aware writes** — new memories default to the current git project; searches span all accessible projects unless filtered
 - **Hybrid search** — dense vector similarity (all-MiniLM-L6-v2) + BM25 keyword matching, fused with Reciprocal Rank Fusion
 - **Ebbinghaus forgetting curve** — memories decay over time; frequently-accessed memories persist, unused ones fade and get tombstoned after ~6 months
 - **Secret filtering** — four-layer detection (known token prefixes, high-entropy strings, credential assignment, keyword proximity) rejects memories containing API keys, tokens, or credentials
@@ -13,6 +18,15 @@ MCP server enabling multiple AI agents to share persistent memory via Qdrant.
 - **Two-step search** — returns titles first for context efficiency, then loads full text on demand
 - **Local embeddings** — all-MiniLM-L6-v2 runs locally, zero external API costs
 - **API-backed MCP** — MCP tools call the REST API directly; no background MCP daemon
+
+## How It Works
+
+1. Agents call `search_memory` to retrieve compact titles and IDs from the team memory store.
+2. Agents call `load_memories` only for relevant hits, keeping context usage low.
+3. Agents call `store_memory` for new durable learnings and `update_memory` when existing knowledge changes.
+4. The Claude Code plugin's `Stop` hook injects the canonical memory-capture prompt every five assistant turns, reminding the active agent to search first, update stale memories, and store new architecture/workflow/troubleshooting learnings.
+
+The hook is intentionally prompt-based. It works in normal Claude Code plugin environments without requiring a separate background model process or direct Qdrant access. The REST API still enforces auth, project access, audit metadata, and secret filtering on every write.
 
 ## Claude Code Setup
 
@@ -130,7 +144,19 @@ Search and recent-listing default to all projects the API key can access. Pass `
 
 ## Agent Instructions
 
-The plugin automatically registers a `Stop` hook that injects the memory-capture prompt every fifth assistant turn. The prompt tells the agent to search existing memories, update outdated entries, and store new architecture/workflow learnings without creating duplicates.
+The plugin automatically registers a Claude Code `Stop` hook from `.claude-plugin/hooks.json`. After assistant turns, the hook runs:
+
+```bash
+node ${CLAUDE_PLUGIN_ROOT}/dist/hooks/memory-turn-hook.js
+```
+
+The hook counts assistant turns from Claude's transcript when available, falls back to per-session state under `CLAUDE_PLUGIN_DATA`, and injects the canonical memory-capture prompt every fifth assistant turn. The prompt tells the active agent to:
+
+- Review the conversation for durable learnings
+- Search existing memories before writing
+- Update outdated memories instead of creating duplicates
+- Store new architecture, workflow, troubleshooting, codebase, infrastructure, and user-preference learnings
+- Keep one concept per memory
 
 For consistent memory usage, also add durable instructions to `~/.claude/CLAUDE.md` or the repo's `CLAUDE.md`/`AGENTS.md`:
 
