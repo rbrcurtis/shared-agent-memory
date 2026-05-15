@@ -1,8 +1,7 @@
 {
   "name": "shared-agent-memory",
-  "displayName": "Shared Agent Memory",
   "description": "API-backed MCP server for shared AI agent memory across Claude Code sessions and projects.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": {
     "name": "Ryan Curtis",
     "email": "wednesday@gmail.com"
@@ -10,13 +9,7 @@
   "homepage": "https://github.com/rbrcurtis/shared-agent-memory",
   "repository": "https://github.com/rbrcurtis/shared-agent-memory",
   "license": "MIT",
-  "keywords": [
-    "mcp",
-    "memory",
-    "agents",
-    "qdrant",
-    "claude-code"
-  ],
+  "keywords": ["mcp", "memory", "agents", "qdrant", "claude-code"],
   "userConfig": {
     "memory_api_url": {
       "type": "string",

@@ -40,12 +40,12 @@ scripts/setup-claude-code.sh
 
 Claude Code will prompt for:
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `memory_api_url` | Shared memory API base URL | `http://localhost:3100` |
-| `memory_api_key` | Bearer token for the memory API | required |
-| `default_agent` | Agent stored on new memories | `claude-code` |
-| `default_project` | Optional project override for new memories | auto-detect |
+| Option            | Description                                | Default                 |
+| ----------------- | ------------------------------------------ | ----------------------- |
+| `memory_api_url`  | Shared memory API base URL                 | `http://localhost:3100` |
+| `memory_api_key`  | Bearer token for the memory API            | required                |
+| `default_agent`   | Agent stored on new memories               | `claude-code`           |
+| `default_project` | Optional project override for new memories | auto-detect             |
 
 For local marketplace testing from this checkout:
 
@@ -81,11 +81,11 @@ claude plugin install shared-agent-memory@shared-agent-memory
 
 ### Installation Scope
 
-| Scope | Flag | Config File | Use Case |
-|-------|------|-------------|----------|
-| User | `--scope user` | Claude user settings | Shared memory API for all projects |
-| Project | `--scope project` | Project Claude settings | Team/project install |
-| Local | `--scope local` | Local Claude settings | Machine-local test install |
+| Scope   | Flag              | Config File             | Use Case                           |
+| ------- | ----------------- | ----------------------- | ---------------------------------- |
+| User    | `--scope user`    | Claude user settings    | Shared memory API for all projects |
+| Project | `--scope project` | Project Claude settings | Team/project install               |
+| Local   | `--scope local`   | Local Claude settings   | Machine-local test install         |
 
 The setup script defaults to user scope. Pass `--scope project` or `--scope local` when needed:
 
@@ -130,47 +130,29 @@ Search and recent-listing default to all projects the API key can access. Pass `
 
 ## Agent Instructions
 
-For consistent memory usage, add instructions to **both** `~/.claude/CLAUDE.md` and a SessionStart hook.
+The plugin automatically registers a `Stop` hook that injects the memory-capture prompt every fifth assistant turn. The prompt tells the agent to search existing memories, update outdated entries, and store new architecture/workflow learnings without creating duplicates.
 
-### 1. Add to ~/.claude/CLAUDE.md
+For consistent memory usage, also add durable instructions to `~/.claude/CLAUDE.md` or the repo's `CLAUDE.md`/`AGENTS.md`:
 
 ```markdown
 ## Shared Memory
+
 - **ALWAYS search_memory BEFORE searching files** when tasks need project context
 - **ALWAYS store_memory** when you learn: workflows, troubleshooting, codebase patterns, user preferences, infrastructure
 - **ALWAYS update_memory** when information changes - no stale duplicates
 - One concept per memory, descriptive text for semantic search
 ```
 
-### 2. Add SessionStart hook to ~/.claude/settings.json
-
-```json
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo '## SHARED MEMORY - REQUIRED\\n\\n**ALWAYS search_memory BEFORE searching files** when tasks need project context.\\n\\n**ALWAYS store_memory** when you learn: workflows, troubleshooting steps, codebase patterns, user preferences, infrastructure details.\\n\\n**ALWAYS update_memory** when information changes - never create duplicates of stale data.\\n\\nOne concept per memory. Descriptive text for semantic search.'"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
 ## Configuration
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `MEMORY_API_URL` | Memory API base URL for MCP clients | `http://localhost:3100` |
-| `MEMORY_API_KEY` | Bearer token for MCP clients | required |
-| `DEFAULT_AGENT` | Default agent identifier | `unknown` |
-| `DEFAULT_PROJECT` | Override auto-detected project | git repo name or folder |
+| Variable          | Description                         | Default                 |
+| ----------------- | ----------------------------------- | ----------------------- |
+| `MEMORY_API_URL`  | Memory API base URL for MCP clients | `http://localhost:3100` |
+| `MEMORY_API_KEY`  | Bearer token for MCP clients        | required                |
+| `DEFAULT_AGENT`   | Default agent identifier            | `unknown`               |
+| `DEFAULT_PROJECT` | Override auto-detected project      | git repo name or folder |
 
 ### CLI Arguments
 
@@ -183,15 +165,15 @@ node dist/index.js \
 
 ## MCP Tools
 
-| Tool | Description |
-|------|-------------|
-| `store_memory` | Store text with a title, generates embedding automatically |
+| Tool            | Description                                                                                           |
+| --------------- | ----------------------------------------------------------------------------------------------------- |
+| `store_memory`  | Store text with a title, generates embedding automatically                                            |
 | `search_memory` | Semantic search across all accessible projects by default — returns titles, IDs, projects, and scores |
-| `load_memories` | Load full text by IDs, reinforces loaded memories |
-| `list_recent` | List recent memories across all accessible projects by default — returns titles, IDs, and projects |
-| `update_memory` | Update existing memory with new text and title |
-| `delete_memory` | Remove a memory by ID |
-| `get_config` | Show current MCP/API configuration |
+| `load_memories` | Load full text by IDs, reinforces loaded memories                                                     |
+| `list_recent`   | List recent memories across all accessible projects by default — returns titles, IDs, and projects    |
+| `update_memory` | Update existing memory with new text and title                                                        |
+| `delete_memory` | Remove a memory by ID                                                                                 |
+| `get_config`    | Show current MCP/API configuration                                                                    |
 
 ### Two-Step Search
 
@@ -252,18 +234,18 @@ Bearer token via the `API_KEYS` environment variable (JSON array):
 
 ### Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/health` | Health check (no auth) |
-| POST | `/api/v1/memories` | Store a memory |
-| GET | `/api/v1/memories/search` | Search with retention re-ranking |
-| GET | `/api/v1/memories/load` | Load full text by IDs, reinforce |
-| GET | `/api/v1/memories/recent` | List recent by creation date |
-| GET | `/api/v1/memories/:id/audit` | List audit events for a memory |
-| PUT | `/api/v1/memories/:id` | Update a memory |
-| DELETE | `/api/v1/memories/:id` | Delete a memory |
-| GET | `/api/v1/config` | Server config and model status |
-| GET | `/docs` | Swagger UI (no auth) |
+| Method | Endpoint                     | Description                      |
+| ------ | ---------------------------- | -------------------------------- |
+| GET    | `/health`                    | Health check (no auth)           |
+| POST   | `/api/v1/memories`           | Store a memory                   |
+| GET    | `/api/v1/memories/search`    | Search with retention re-ranking |
+| GET    | `/api/v1/memories/load`      | Load full text by IDs, reinforce |
+| GET    | `/api/v1/memories/recent`    | List recent by creation date     |
+| GET    | `/api/v1/memories/:id/audit` | List audit events for a memory   |
+| PUT    | `/api/v1/memories/:id`       | Update a memory                  |
+| DELETE | `/api/v1/memories/:id`       | Delete a memory                  |
+| GET    | `/api/v1/config`             | Server config and model status   |
+| GET    | `/docs`                      | Swagger UI (no auth)             |
 
 ### Audit Metadata
 
@@ -295,12 +277,12 @@ retention = e^(-t / (BASE_HALF_LIFE * stability / ln(2)))
 With `BASE_HALF_LIFE = 27 days`, a never-accessed memory (stability = 1.0) drops to 50% retention after 27 days. Frequently-accessed memories decay much slower because their stability grows logarithmically:
 
 | Access Count | Stability | Effective Half-Life |
-|-------------|-----------|-------------------|
-| 0 | 1.0 | 27 days |
-| 1 | 1.69 | 46 days |
-| 5 | 2.79 | 75 days |
-| 10 | 3.40 | 92 days |
-| 20 | 4.04 | 109 days |
+| ------------ | --------- | ------------------- |
+| 0            | 1.0       | 27 days             |
+| 1            | 1.69      | 46 days             |
+| 5            | 2.79      | 75 days             |
+| 10           | 3.40      | 92 days             |
+| 20           | 4.04      | 109 days            |
 
 ### Reinforcement Through Loading, Not Searching
 
@@ -348,6 +330,7 @@ A standalone web UI for browsing, searching, editing, and deleting memories. Sin
 - Edit titles, text, and tags; tombstone-delete memories
 
 Open locally:
+
 ```
 file:///path/to/web/index.html?url=http://localhost:6333&key=YOUR_KEY
 ```

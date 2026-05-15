@@ -5,21 +5,16 @@
     "email": "wednesday@gmail.com"
   },
   "description": "Shared memory MCP server for Claude Code agents",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "plugins": [
     {
       "name": "shared-agent-memory",
       "source": "./",
       "description": "API-backed shared memory MCP server with project-aware search and storage",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "strict": true,
       "category": "mcp",
-      "tags": [
-        "mcp",
-        "memory",
-        "agents",
-        "qdrant"
-      ]
+      "tags": ["mcp", "memory", "agents", "qdrant"]
     }
   ]
 }

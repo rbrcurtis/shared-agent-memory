@@ -1,0 +1,17 @@
+{
+  "description": "Injects the shared memory context-capture prompt every fifth assistant turn so agents update existing memories and store new architecture/workflow learnings.",
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/dist/hooks/memory-turn-hook.js",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
