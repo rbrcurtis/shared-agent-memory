@@ -20,7 +20,11 @@ export const storeMemoryBody = {
     text: { type: "string", minLength: 1 },
     title: { type: "string", minLength: 1, description: "max 10 words" },
     agent: { type: "string", default: "unknown" },
-    project: { type: "string", description: "required project to store in; use a concrete project name, not *" },
+    project: {
+      type: "string",
+      description:
+        "required project to store in; use a concrete project name, not *",
+    },
     tags: { type: "array", items: { type: "string" }, default: [] },
   },
 } as const;
@@ -46,7 +50,11 @@ export const searchQuerystring = {
     query: { type: "string" },
     limit: { type: "integer", default: 10 },
     agent: { type: "string" },
-    project: { type: "string", description: "optional project filter; omit or use * for all accessible projects" },
+    project: {
+      type: "string",
+      description:
+        "optional project filter; omit or use * for all accessible projects",
+    },
     tags: { type: "string", description: "comma-separated" },
   },
 } as const;
@@ -76,7 +84,10 @@ export const loadQuerystring = {
   required: ["ids"],
   properties: {
     ids: { type: "string", description: "comma-separated UUIDs" },
-    project: { type: "string", description: "ignored; access is checked against each loaded memory" },
+    project: {
+      type: "string",
+      description: "ignored; access is checked against each loaded memory",
+    },
   },
 } as const;
 
@@ -141,7 +152,11 @@ export const recentQuerystring = {
   properties: {
     limit: { type: "integer", default: 10 },
     days: { type: "integer", default: 30 },
-    project: { type: "string", description: "optional project filter; omit or use * for all accessible projects" },
+    project: {
+      type: "string",
+      description:
+        "optional project filter; omit or use * for all accessible projects",
+    },
   },
 } as const;
 
@@ -216,11 +231,10 @@ export const configResponse = {
     data: {
       type: "object",
       properties: {
-        qdrantUrl: { type: "string" },
         collectionName: { type: "string" },
         modelReady: { type: "boolean" },
       },
-      required: ["qdrantUrl", "collectionName", "modelReady"],
+      required: ["collectionName", "modelReady"],
     },
   },
   required: ["data"],

@@ -1,7 +1,7 @@
 {
   "name": "shared-agent-memory",
-  "version": "0.2.1",
-  "description": "MCP server for shared AI agent memory via Qdrant",
+  "version": "0.2.2",
+  "description": "MCP server for shared AI agent memory via the Memory API",
   "main": "dist/index.js",
   "bin": {
     "shared-agent-memory": "./dist/index.js"
