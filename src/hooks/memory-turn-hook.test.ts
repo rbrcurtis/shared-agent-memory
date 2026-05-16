@@ -11,6 +11,7 @@ import {
 let tempDir = "";
 let originalPluginData: string | undefined;
 let originalCodexPluginData: string | undefined;
+let originalCursorPluginData: string | undefined;
 
 function writeTranscript(roles: string[]): string {
   const file = path.join(tempDir, "transcript.jsonl");
@@ -25,8 +26,10 @@ beforeEach(() => {
   tempDir = fs.mkdtempSync(path.join(process.cwd(), ".tmp-memory-hook-"));
   originalPluginData = process.env["CLAUDE_PLUGIN_DATA"];
   originalCodexPluginData = process.env["PLUGIN_DATA"];
+  originalCursorPluginData = process.env["CURSOR_PLUGIN_DATA"];
   process.env["CLAUDE_PLUGIN_DATA"] = path.join(tempDir, "state");
   delete process.env["PLUGIN_DATA"];
+  delete process.env["CURSOR_PLUGIN_DATA"];
 });
 
 afterEach(() => {
@@ -39,6 +42,11 @@ afterEach(() => {
     delete process.env["PLUGIN_DATA"];
   } else {
     process.env["PLUGIN_DATA"] = originalCodexPluginData;
+  }
+  if (originalCursorPluginData === undefined) {
+    delete process.env["CURSOR_PLUGIN_DATA"];
+  } else {
+    process.env["CURSOR_PLUGIN_DATA"] = originalCursorPluginData;
   }
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
@@ -130,6 +138,18 @@ describe("memory turn hook", () => {
     expect(buildHookResult(input)).toBeNull();
     expect(
       fs.existsSync(path.join(tempDir, "codex-state", "codex-session.json")),
+    ).toBe(true);
+  });
+
+  it("uses Cursor plugin data for fallback state", () => {
+    delete process.env["CLAUDE_PLUGIN_DATA"];
+    process.env["CURSOR_PLUGIN_DATA"] = path.join(tempDir, "cursor-state");
+
+    const input = { session_id: "cursor-session" };
+
+    expect(buildHookResult(input)).toBeNull();
+    expect(
+      fs.existsSync(path.join(tempDir, "cursor-state", "cursor-session.json")),
     ).toBe(true);
   });
 });

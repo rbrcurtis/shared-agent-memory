@@ -70,6 +70,7 @@ export function parseHookInput(raw: string): HookInput {
 function stateRoot(): string {
   return (
     process.env["SHARED_AGENT_MEMORY_PLUGIN_DATA"] ??
+    process.env["CURSOR_PLUGIN_DATA"] ??
     process.env["PLUGIN_DATA"] ??
     process.env["CLAUDE_PLUGIN_DATA"] ??
     path.join(os.tmpdir(), "shared-agent-memory-hook-state")

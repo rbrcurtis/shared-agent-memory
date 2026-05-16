@@ -7,8 +7,8 @@ if [ "${1:-}" = "--memory-turn-hook" ]; then
   shift
 fi
 
-ROOT="${SHARED_AGENT_MEMORY_PLUGIN_ROOT:-${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}}"
-DATA="${SHARED_AGENT_MEMORY_PLUGIN_DATA:-${PLUGIN_DATA:-${CLAUDE_PLUGIN_DATA:-$ROOT/.plugin-data}}}"
+ROOT="${SHARED_AGENT_MEMORY_PLUGIN_ROOT:-${CURSOR_PLUGIN_ROOT:-${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}}}"
+DATA="${SHARED_AGENT_MEMORY_PLUGIN_DATA:-${CURSOR_PLUGIN_DATA:-${PLUGIN_DATA:-${CLAUDE_PLUGIN_DATA:-$ROOT/.plugin-data}}}}"
 RUNTIME="$DATA/runtime"
 STAMP="$RUNTIME/.source-sha256"
 

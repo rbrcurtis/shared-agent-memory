@@ -1,13 +1,13 @@
 # Shared Agent Memory
 
-Self-updating RAG for teams of AI agents. Shared Agent Memory gives Claude Code and other MCP clients a common, searchable project memory backed by Qdrant, then nudges agents to keep that memory current as they work.
+Self-updating RAG for teams of AI agents. Shared Agent Memory gives Claude Code, Codex, Cursor, and other MCP clients a common, searchable project memory backed by Qdrant, then nudges agents to keep that memory current as they work.
 
 Instead of every agent rediscovering the same repo patterns, infrastructure details, and troubleshooting history, teams get a shared retrieval layer that improves over time. Agents search the memory store before diving into files, load only the relevant full notes, and store or update durable learnings when the conversation reveals something worth preserving.
 
 ## Features
 
 - **Team RAG layer** — shared retrieval-augmented context across projects, repos, and agents
-- **Self-updating workflow** — Claude Code plugin ships a `Stop` hook that prompts memory curation every fifth assistant turn
+- **Self-updating workflow** — Claude Code, Codex, and Cursor plugins ship stop hooks that prompt memory curation every fifth assistant turn
 - **Project-aware writes** — new memories default to the current git project; searches span all accessible projects unless filtered
 - **Hybrid search** — dense vector similarity (all-MiniLM-L6-v2) + BM25 keyword matching, fused with Reciprocal Rank Fusion
 - **Ebbinghaus forgetting curve** — memories decay over time; frequently-accessed memories persist, unused ones fade and get tombstoned after ~6 months
@@ -24,9 +24,9 @@ Instead of every agent rediscovering the same repo patterns, infrastructure deta
 1. Agents call `search_memory` to retrieve compact titles and IDs from the team memory store.
 2. Agents call `load_memories` only for relevant hits, keeping context usage low.
 3. Agents call `store_memory` for new durable learnings and `update_memory` when existing knowledge changes.
-4. The Claude Code plugin's `Stop` hook injects the canonical memory-capture prompt every five assistant turns, reminding the active agent to search first, update stale memories, and store new architecture/workflow/troubleshooting learnings.
+4. Agent plugins inject the canonical memory-capture prompt every five assistant turns, reminding the active agent to search first, update stale memories, and store new architecture/workflow/troubleshooting learnings.
 
-The hook is intentionally prompt-based. It works in normal Claude Code plugin environments without requiring a separate background model process or direct Qdrant access. The REST API still enforces auth, project access, audit metadata, and secret filtering on every write.
+The hook is intentionally prompt-based. It works in normal agent plugin environments without requiring a separate background model process or direct Qdrant access. The REST API still enforces auth, project access, audit metadata, and secret filtering on every write.
 
 ## Claude Code Setup
 
@@ -178,6 +178,34 @@ DEFAULT_AGENT = "codex"
 DEFAULT_PROJECT = ""
 ```
 
+## Cursor Setup
+
+Cursor support ships with the same plugin shape as the official Cursor marketplace:
+
+- `.cursor-plugin/marketplace.json` - repo marketplace entry
+- `.cursor-plugin/plugin.json` - Cursor plugin metadata
+- `.mcp.cursor.json` - bundled MCP server config
+- `hooks/hooks.cursor.json` - Cursor `stop` hook for memory capture
+
+For local testing, expose this checkout as a local Cursor plugin and reload Cursor:
+
+```bash
+mkdir -p ~/.cursor/plugins/local
+ln -s "$(pwd)" ~/.cursor/plugins/local/shared-agent-memory
+```
+
+For team rollout, import `rbrcurtis/shared-agent-memory` as a Cursor team marketplace and enable auto refresh. Marketplace updates are repo-driven; new pushes are re-indexed and clients pick them up on refresh/restart.
+
+The Cursor MCP config launches `bin/shared-agent-memory` through `CURSOR_PLUGIN_ROOT` and defaults `DEFAULT_AGENT` to `cursor`. Set these in Cursor's environment or your deployment wrapper:
+
+```bash
+export MEMORY_API_URL=http://localhost:3100
+export MEMORY_API_KEY=your-bearer-token
+export DEFAULT_AGENT=cursor
+```
+
+Use a direct Cursor MCP entry only when you need machine-local credentials outside the plugin marketplace.
+
 ## Project Scoping
 
 MCP `store_memory` stores new memories in the detected current project when `project` is omitted. Agents may pass `project` only when deliberately saving knowledge for a different related repo. The MCP server determines the default project by:
@@ -191,7 +219,7 @@ Search and recent-listing default to all projects the API key can access. Pass `
 
 ## Agent Instructions
 
-The Claude Code and Codex plugins automatically register a `Stop` hook. After assistant turns, the hook runs the shared wrapper:
+The Claude Code, Codex, and Cursor plugins automatically register a stop hook. After assistant turns, the hook runs the shared wrapper:
 
 ```bash
 bin/shared-agent-memory --memory-turn-hook
@@ -415,7 +443,8 @@ For Kubernetes deployment, see `k8s/` directory (nginx serving static files via 
 ```
 Agent 1 (Claude Code) ──┐
                         ├── MCP Wrapper ── REST API (Fastify) ── Qdrant
-Agent 2 (Cursor)     ──┘                   localhost:3100
+Agent 2 (Codex)      ──┤                   localhost:3100
+Agent 3 (Cursor)     ──┘
 
 External Service ────── REST API (Fastify) ── Qdrant
                         localhost:3100

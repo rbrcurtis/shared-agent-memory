@@ -1,0 +1,18 @@
+{
+  "name": "shared-agent-memory",
+  "displayName": "Shared Agent Memory",
+  "version": "0.2.4",
+  "description": "Team memory RAG for Cursor, Codex, Claude Code, and other MCP clients.",
+  "author": {
+    "name": "Ryan Curtis",
+    "email": "wednesday@gmail.com"
+  },
+  "homepage": "https://github.com/rbrcurtis/shared-agent-memory",
+  "repository": "https://github.com/rbrcurtis/shared-agent-memory",
+  "license": "MIT",
+  "keywords": ["mcp", "memory", "agents", "rag", "cursor"],
+  "category": "developer-tools",
+  "tags": ["mcp", "memory", "team-rag", "hooks"],
+  "mcpServers": "./.mcp.cursor.json",
+  "hooks": "./hooks/hooks.cursor.json"
+}

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "shared-memory": {
+      "command": "bash",
+      "args": [
+        "-lc",
+        "root=\"${CURSOR_PLUGIN_ROOT:-${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}}\"; test -n \"$root\"; export DEFAULT_AGENT=\"${DEFAULT_AGENT:-cursor}\"; exec \"$root/bin/shared-agent-memory\""
+      ]
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "shared-agent-memory",
+  "owner": {
+    "name": "Ryan Curtis",
+    "email": "wednesday@gmail.com"
+  },
+  "metadata": {
+    "description": "Shared memory MCP plugins for AI coding agents"
+  },
+  "plugins": [
+    {
+      "name": "shared-agent-memory",
+      "source": ".",
+      "description": "API-backed shared memory MCP server with project-aware writes and self-updating team RAG"
+    }
+  ]
+}
