@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -ex
+set -e
 
 TARGET="index"
 if [ "${1:-}" = "--memory-turn-hook" ]; then
@@ -9,8 +9,23 @@ fi
 
 ROOT="${SHARED_AGENT_MEMORY_PLUGIN_ROOT:-${CURSOR_PLUGIN_ROOT:-${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}}}"
 DATA="${SHARED_AGENT_MEMORY_PLUGIN_DATA:-${CURSOR_PLUGIN_DATA:-${PLUGIN_DATA:-${CLAUDE_PLUGIN_DATA:-$ROOT/.plugin-data}}}}"
+NODE_BIN="${NODE:-$(command -v node 2>/dev/null || find "$HOME/.nvm/versions/node" -path '*/bin/node' -type f 2>/dev/null | sort -V | tail -1)}"
+NODE_DIR="$(dirname "$NODE_BIN")"
+NPM_BIN="$(command -v npm 2>/dev/null || { test -x "$NODE_DIR/npm" && printf '%s\n' "$NODE_DIR/npm"; })"
+PATH="$NODE_DIR:${PATH:-}"
+export PATH
 RUNTIME="$DATA/runtime"
 STAMP="$RUNTIME/.source-sha256"
+
+if [ -z "$NODE_BIN" ]; then
+  echo "Node.js is required: set NODE or install Node.js" >&2
+  exit 127
+fi
+
+if [ -z "$NPM_BIN" ]; then
+  echo "npm is required: install npm with Node.js" >&2
+  exit 127
+fi
 
 mkdir -p "$RUNTIME"
 
@@ -26,8 +41,8 @@ if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP")" != "$HASH" ] || [ ! -f "$RUNTIME/dis
   rm -rf "$RUNTIME/src" "$RUNTIME/dist" "$RUNTIME/node_modules"
   cp "$ROOT/package.json" "$ROOT/package-lock.json" "$ROOT/tsconfig.json" "$RUNTIME/"
   cp -R "$ROOT/src" "$RUNTIME/src"
-  (cd "$RUNTIME" && npm ci && npm run build)
+  (cd "$RUNTIME" && "$NPM_BIN" ci >&2 && "$NPM_BIN" run build >&2)
   printf '%s\n' "$HASH" > "$STAMP"
 fi
 
-exec node "$RUNTIME/dist/$TARGET.js" "$@"
+exec "$NODE_BIN" "$RUNTIME/dist/$TARGET.js" "$@"

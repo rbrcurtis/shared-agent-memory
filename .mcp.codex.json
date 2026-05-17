@@ -4,7 +4,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "root=\"${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}\"; test -n \"$root\"; exec \"$root/bin/shared-agent-memory\""
+        "root=\"${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$(pwd)}}\"; exec \"$root/bin/shared-agent-memory\""
       ],
       "env_vars": [
         "MEMORY_API_URL",
