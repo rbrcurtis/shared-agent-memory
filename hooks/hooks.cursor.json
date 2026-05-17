@@ -1,7 +1,7 @@
 {
   "version": 1,
   "hooks": {
-    "stop": [
+    "promptSubmitted": [
       {
         "command": "bash -c 'root=\"${CURSOR_PLUGIN_ROOT:-${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}}\"; test -n \"$root\"; exec \"$root/bin/shared-agent-memory\" --memory-turn-hook'"
       }
