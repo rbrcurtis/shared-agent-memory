@@ -26,6 +26,34 @@ function ensureArray<T>(val: unknown): T[] | undefined {
   return undefined;
 }
 
+/** Compact "by X" / "created by X, updated by Y" attribution, or "" if unknown. */
+function formatAttribution(r: SearchResult): string {
+  const creator = r.createdBy;
+  const updater = r.updatedBy;
+  if (creator && updater && creator !== updater) {
+    return `created by ${creator}, updated by ${updater}`;
+  }
+  const who = creator || updater;
+  return who ? `by ${who}` : "";
+}
+
+/** Created/Updated metadata line for full memory display, including actor names. */
+function formatMeta(r: SearchResult): string {
+  const parts = [
+    `Created: ${r.created_at}${r.createdBy ? ` by ${r.createdBy}` : ""}`,
+  ];
+  const updatedAt = r.updatedAt || r.updated_at;
+  const changed =
+    (updatedAt && updatedAt !== r.created_at) ||
+    (r.updatedBy && r.updatedBy !== r.createdBy);
+  if (changed) {
+    parts.push(
+      `Updated: ${updatedAt || r.created_at}${r.updatedBy ? ` by ${r.updatedBy}` : ""}`,
+    );
+  }
+  return parts.join(" | ");
+}
+
 const args = arg({
   "--api-key": String,
   "--agent": String,
@@ -125,7 +153,7 @@ async function main(): Promise<void> {
   console.error(`Default Project: ${defaultProject}`);
   console.error(`Default Agent: ${defaultAgent}`);
 
-  const server = new Server({ name: "shared-agent-memory", version: "0.2.4" });
+  const server = new Server({ name: "shared-agent-memory", version: "0.2.5" });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
@@ -299,10 +327,10 @@ async function main(): Promise<void> {
                 results.length === 0
                   ? "No memories found."
                   : results
-                      .map(
-                        (r, i) =>
-                          `[${i + 1}] (score: ${r.score.toFixed(3)}) [${r.project}] ${r.id}\n${r.title || "(untitled)"}`,
-                      )
+                      .map((r, i) => {
+                        const who = formatAttribution(r);
+                        return `[${i + 1}] (score: ${r.score.toFixed(3)}) [${r.project}] ${r.id}\n${r.title || "(untitled)"}${who ? ` — ${who}` : ""}`;
+                      })
                       .join("\n"),
             },
           ],
@@ -323,7 +351,7 @@ async function main(): Promise<void> {
                   : results
                       .map(
                         (r, i) =>
-                          `[${i + 1}] [${r.agent}/${r.project}]\nID: ${r.id}\nTitle: ${r.title || "(untitled)"}\n${r.text}\nTags: ${Array.isArray(r.tags) ? r.tags.join(", ") : "none"} | Created: ${r.created_at}`,
+                          `[${i + 1}] [${r.agent}/${r.project}]\nID: ${r.id}\nTitle: ${r.title || "(untitled)"}\n${r.text}\nTags: ${Array.isArray(r.tags) ? r.tags.join(", ") : "none"} | ${formatMeta(r)}`,
                       )
                       .join("\n\n"),
             },
@@ -345,10 +373,10 @@ async function main(): Promise<void> {
                 results.length === 0
                   ? "No recent memories."
                   : results
-                      .map(
-                        (r, i) =>
-                          `[${i + 1}] [${r.project}] ${r.id} ${r.created_at}\n${r.title || "(untitled)"}`,
-                      )
+                      .map((r, i) => {
+                        const who = formatAttribution(r);
+                        return `[${i + 1}] [${r.project}] ${r.id} ${r.created_at}\n${r.title || "(untitled)"}${who ? ` — ${who}` : ""}`;
+                      })
                       .join("\n"),
             },
           ],
