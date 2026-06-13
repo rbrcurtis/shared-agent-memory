@@ -71,8 +71,6 @@ export const searchResponse = {
           title: { type: "string" },
           project: { type: "string" },
           score: { type: "number" },
-          created_at: { type: "string", format: "date-time" },
-          updatedAt: { type: "string", format: "date-time" },
           createdBy: { type: "string" },
           updatedBy: { type: "string" },
         },

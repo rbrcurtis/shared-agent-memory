@@ -268,8 +268,6 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
         title: r.title,
         project: r.project,
         score: r.adjustedScore,
-        created_at: r.created_at,
-        updatedAt: r.updatedAt,
         createdBy: r.createdBy,
         updatedBy: r.updatedBy,
       })),
