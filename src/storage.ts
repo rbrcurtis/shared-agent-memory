@@ -3,6 +3,15 @@ import { ServerConfig, MemoryMetadata, SearchResult, AuditEvent } from './types.
 import { computeStability, DENSE_VECTOR_NAME, BM25_VECTOR_NAME, BM25_MODEL } from './retention.js';
 import { randomUUID } from 'crypto';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Qdrant only accepts integer or valid-UUID point ids. Memory ids are UUIDs, so a
+// malformed id (e.g. an agent hallucinating a truncated UUID) must be rejected before
+// it reaches Qdrant, which would otherwise throw an opaque 400 and crash the request.
+export function isValidMemoryId(id: string): boolean {
+  return UUID_RE.test(id);
+}
+
 interface StoreParams {
   text: string;
   title: string;

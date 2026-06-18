@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { StorageService } from '../../storage.js';
+import { StorageService, isValidMemoryId } from '../../storage.js';
 import { EmbeddingService } from '../../embeddings.js';
 import { detectSecrets } from '../../secret-filter.js';
 import { computeRetention, OVER_FETCH_MULTIPLIER, TOMBSTONE_THRESHOLD } from '../../retention.js';
@@ -31,6 +31,12 @@ export interface MemoryRouteDeps {
 
 function sendError(reply: FastifyReply, code: number, message: string): void {
   reply.code(code).send({ error: { code, message } });
+}
+
+// The snippet is already masked (secret replaced with ***), so it is safe to surface
+// and tells the agent which value tripped the filter and where, so it can redact it.
+function secretError(field: string, d: { rule: string; position: number; snippet: string }): string {
+  return `Secret detected in ${field} (rule: ${d.rule}, position: ${d.position}): ${d.snippet}`;
 }
 
 export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps): Promise<void> {
@@ -74,12 +80,12 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
 
     const secretInText = detectSecrets(text);
     if (secretInText) {
-      return sendError(reply, 400, `Secret detected in text: ${secretInText.rule}`);
+      return sendError(reply, 400, secretError('text', secretInText));
     }
 
     const secretInTitle = detectSecrets(title);
     if (secretInTitle) {
-      return sendError(reply, 400, `Secret detected in title: ${secretInTitle.rule}`);
+      return sendError(reply, 400, secretError('title', secretInTitle));
     }
 
     const resolved = resolveProject(key, project);
@@ -283,6 +289,7 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
       querystring: loadQuerystring,
       response: {
         200: loadResponse,
+        400: errorResponse,
         403: errorResponse,
       },
     },
@@ -299,6 +306,12 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
     const { ids: idsParam } = request.query;
 
     const ids = idsParam.split(',').map(id => id.trim()).filter(Boolean);
+
+    const invalid = ids.filter(id => !isValidMemoryId(id));
+    if (invalid.length > 0) {
+      return sendError(reply, 400, `Invalid memory id(s): ${invalid.join(', ')}. Ids must be valid UUIDs.`);
+    }
+
     const results = await storage.getByIds(ids);
 
     const filtered = results.filter(r => checkProjectAccess(key, r.project));
@@ -463,6 +476,10 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
     const { id } = request.params;
     const { text, title: newTitle } = request.body;
 
+    if (!isValidMemoryId(id)) {
+      return sendError(reply, 400, `Invalid memory id: ${id}. Ids must be valid UUIDs.`);
+    }
+
     const existing = await storage.getByIds([id]);
     if (existing.length === 0) {
       return sendError(reply, 404, 'Memory not found');
@@ -479,12 +496,12 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
 
     const secretInText = detectSecrets(text);
     if (secretInText) {
-      return sendError(reply, 400, `Secret detected in text: ${secretInText.rule}`);
+      return sendError(reply, 400, secretError('text', secretInText));
     }
 
     const secretInTitle = detectSecrets(title);
     if (secretInTitle) {
-      return sendError(reply, 400, `Secret detected in title: ${secretInTitle.rule}`);
+      return sendError(reply, 400, secretError('title', secretInTitle));
     }
 
     const vector = await embeddings.generateEmbedding(text);
@@ -526,6 +543,7 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
       params: memoryIdParams,
       response: {
         200: successResponse,
+        400: errorResponse,
         403: errorResponse,
         404: errorResponse,
       },
@@ -538,6 +556,10 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
   ) => {
     const key: ApiKeyConfig = request.apiKey;
     const { id } = request.params;
+
+    if (!isValidMemoryId(id)) {
+      return sendError(reply, 400, `Invalid memory id: ${id}. Ids must be valid UUIDs.`);
+    }
 
     const existing = await storage.getByIds([id]);
     if (existing.length === 0) {
