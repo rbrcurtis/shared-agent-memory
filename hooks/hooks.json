@@ -1,14 +1,24 @@
 {
-  "description": "Injects the shared memory context-capture prompt every fifth assistant turn so agents update existing memories and store new architecture/workflow learnings.",
+  "description": "Injects shared-memory usage guidance at session start and a recursive-task-state resume prompt after compaction.",
   "hooks": {
-    "PromptSubmitted": [
+    "SessionStart": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "bash -lc 'root=\"${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}\"; test -n \"$root\"; exec \"$root/bin/shared-agent-memory\" --memory-turn-hook'",
-            "timeout": 10,
-            "statusMessage": "Checking shared memory updates"
+            "command": "echo '## SHARED MEMORY MCP - REQUIRED\\n\\n**ALWAYS use search_memory tool BEFORE searching files or using explore subagent** when tasks need project context.\\n\\n**ALWAYS search_memory when you hit a roadblock** — auth failures, connection errors, missing credentials, unknown URLs, unfamiliar services. Memory likely has the answer. Never give up on a task without searching memory first.\\n\\n**ALWAYS use store_memory tool** when you learn: workflows, troubleshooting steps, codebase patterns, user preferences, infrastructure details.\\n\\n**ALWAYS use update_memory tool** when information changes - never create duplicates of stale data.\\n\\nOne concept per memory. Descriptive text for semantic search.'",
+            "statusMessage": "Loading shared memory guidance"
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PostCompact\",\"additionalContext\":\"POST-COMPACTION: Search shared memory for tag recursive-task-state. If found, reload the task state and resume execution from where you left off. Do not re-introduce yourself or re-explain the task.\"}}'",
+            "statusMessage": "Checking for recursive task..."
           }
         ]
       }
