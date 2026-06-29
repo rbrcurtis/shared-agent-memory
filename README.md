@@ -138,7 +138,7 @@ Codex support ships as a native plugin manifest plus a repo-local marketplace:
 - `.codex-plugin/plugin.json` - Codex plugin metadata
 - `.agents/plugins/marketplace.json` - marketplace entry for this repo
 - `.mcp.codex.json` - bundled MCP server config
-- `hooks/hooks.json` - Codex `Stop` hook for memory capture
+- `hooks/hooks.json` - shared session-start + post-compact hooks for memory guidance
 
 Add this repo as a Codex marketplace:
 
@@ -185,7 +185,6 @@ Cursor support ships with the same plugin shape as the official Cursor marketpla
 - `.cursor-plugin/marketplace.json` - repo marketplace entry
 - `.cursor-plugin/plugin.json` - Cursor plugin metadata
 - `.mcp.cursor.json` - bundled MCP server config
-- `hooks/hooks.cursor.json` - Cursor `stop` hook for memory capture
 
 For local testing, expose this checkout as a local Cursor plugin and reload Cursor:
 
