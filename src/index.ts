@@ -153,7 +153,7 @@ async function main(): Promise<void> {
   console.error(`Default Project: ${defaultProject}`);
   console.error(`Default Agent: ${defaultAgent}`);
 
-  const server = new Server({ name: "shared-agent-memory", version: "0.2.5" });
+  const server = new Server({ name: "shared-agent-memory", version: "0.2.8" });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [

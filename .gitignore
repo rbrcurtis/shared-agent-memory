@@ -1,5 +1,10 @@
 node_modules/
-dist/
+# dist/ ships the prebuilt MCP bundles (npm run bundle); ignore everything else tsc emits there
+dist/*
+!dist/index.js
+!dist/hooks/
+dist/hooks/*
+!dist/hooks/memory-turn-hook.js
 .plugin-data/
 .env
 *.log
