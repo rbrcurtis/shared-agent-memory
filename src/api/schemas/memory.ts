@@ -48,7 +48,7 @@ export const searchQuerystring = {
   required: ["query"],
   properties: {
     query: { type: "string" },
-    limit: { type: "integer", default: 10 },
+    limit: { type: "integer", default: 15 },
     agent: { type: "string" },
     project: {
       type: "string",

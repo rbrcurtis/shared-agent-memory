@@ -3,6 +3,7 @@ import { StorageService, isValidMemoryId } from '../../storage.js';
 import { EmbeddingService } from '../../embeddings.js';
 import { detectSecrets } from '../../secret-filter.js';
 import { computeRetention, OVER_FETCH_MULTIPLIER, TOMBSTONE_THRESHOLD } from '../../retention.js';
+import { relevanceMultiplier } from '../../search-ranking.js';
 import { checkProjectAccess, resolveProject } from '../middleware/auth.js';
 import type { ApiKeyConfig } from '../middleware/auth.js';
 import type { SearchResult } from '../../types.js';
@@ -145,7 +146,7 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
     reply: FastifyReply,
   ) => {
     const key: ApiKeyConfig = request.apiKey;
-    const { query, limit = 10, agent, tags } = request.query;
+    const { query, limit = 15, agent, tags } = request.query;
     const project = request.query.project || '*';
 
     if (!checkProjectAccess(key, project)) {
@@ -156,7 +157,9 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
     const parsedTags = tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : undefined;
 
     const vector = await embeddings.generateEmbedding(query);
-    const fetchLimit = limit * OVER_FETCH_MULTIPLIER;
+    // Give deterministic payload re-ranking enough candidates to recover exact
+    // project, identifier, and broad term matches from weak fused ranks.
+    const fetchLimit = Math.max(limit * OVER_FETCH_MULTIPLIER, 50);
 
     let rawResults: SearchResult[];
 
@@ -199,7 +202,11 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
       if (retention < TOMBSTONE_THRESHOLD) {
         toTombstone.push(r.id);
       } else {
-        scored.push({ ...r, adjustedScore: r.score * retention });
+        const multiplier = relevanceMultiplier(query, r);
+        scored.push({
+          ...r,
+          adjustedScore: r.score * retention * multiplier,
+        });
       }
     }
 
@@ -250,7 +257,11 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
           if (retention < TOMBSTONE_THRESHOLD) {
             toTombstone.push(r.id);
           } else {
-            scored.push({ ...r, adjustedScore: minScore * retention * 0.9 });
+            const multiplier = relevanceMultiplier(query, r);
+            scored.push({
+              ...r,
+              adjustedScore: minScore * retention * 0.9 * multiplier,
+            });
           }
         }
 
