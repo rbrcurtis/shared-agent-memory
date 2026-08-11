@@ -3,7 +3,7 @@ import { StorageService, isValidMemoryId } from '../../storage.js';
 import { EmbeddingService } from '../../embeddings.js';
 import { detectSecrets } from '../../secret-filter.js';
 import { computeRetention, OVER_FETCH_MULTIPLIER, TOMBSTONE_THRESHOLD } from '../../retention.js';
-import { relevanceMultiplier } from '../../search-ranking.js';
+import { relevanceBonus } from '../../search-ranking.js';
 import { checkProjectAccess, resolveProject } from '../middleware/auth.js';
 import type { ApiKeyConfig } from '../middleware/auth.js';
 import type { SearchResult } from '../../types.js';
@@ -202,10 +202,10 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
       if (retention < TOMBSTONE_THRESHOLD) {
         toTombstone.push(r.id);
       } else {
-        const multiplier = relevanceMultiplier(query, r);
+        const bonus = relevanceBonus(query, r);
         scored.push({
           ...r,
-          adjustedScore: r.score * retention * multiplier,
+          adjustedScore: r.score * retention + bonus,
         });
       }
     }
@@ -257,10 +257,10 @@ export async function memoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps):
           if (retention < TOMBSTONE_THRESHOLD) {
             toTombstone.push(r.id);
           } else {
-            const multiplier = relevanceMultiplier(query, r);
+            const bonus = relevanceBonus(query, r);
             scored.push({
               ...r,
-              adjustedScore: minScore * retention * 0.9 * multiplier,
+              adjustedScore: minScore * retention * 0.9 + bonus,
             });
           }
         }

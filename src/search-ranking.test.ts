@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { relevanceMultiplier } from './search-ranking.js';
+import { relevanceBonus } from './search-ranking.js';
 import type { SearchResult } from './types.js';
 
 function result(overrides: Partial<SearchResult>): SearchResult {
@@ -16,23 +16,33 @@ function result(overrides: Partial<SearchResult>): SearchResult {
   };
 }
 
-describe('relevanceMultiplier', () => {
-  it('prefers project, identifier, and broad query matches over generic terms', () => {
-    const query = 'Accordyx production database query users event access level big-berks-2027';
-    const useful = result({
+describe('relevanceBonus', () => {
+  it('prefers project and role intent over a generic exact slug match', () => {
+    const query = 'Accordyx user access level big-berks-2027 event roles';
+    const permissions = result({
       project: 'accordyx',
-      title: 'Big Berks prod role assignments',
-      tags: ['production', 'events', 'users'],
-      text: 'Event big-berks-2027 access roles and user setup.',
+      title: 'Rubric and track roles permissions matrix',
+      tags: ['big-berks-2027', 'permissions', 'roles', 'track-chairs'],
+      text: 'Event access for owners, admins, chairs, and committee members.',
     });
-    const generic = result({
-      project: 'okkanti',
-      title: 'Production database access',
-      text: 'Query users in the production database.',
+    const slugError = result({
+      project: 'accordyx',
+      title: 'Malformed event slug causes ES 400',
+      text: 'The big-berks-2027 event slug caused an Elasticsearch error.',
     });
 
-    expect(relevanceMultiplier(query, useful)).toBeGreaterThan(
-      relevanceMultiplier(query, generic),
+    expect(relevanceBonus(query, permissions)).toBeGreaterThan(
+      relevanceBonus(query, slugError),
+    );
+  });
+
+  it('weights title and tag coverage above body-only coverage', () => {
+    const query = 'event roles permissions';
+    const metadataMatch = result({ title: 'Event roles', tags: ['permissions'] });
+    const bodyMatch = result({ text: 'Event roles and permissions.' });
+
+    expect(relevanceBonus(query, metadataMatch)).toBeGreaterThan(
+      relevanceBonus(query, bodyMatch),
     );
   });
 
@@ -41,8 +51,8 @@ describe('relevanceMultiplier', () => {
     const exact = result({ project: 'accordyx' });
     const partial = result({ project: 'accordyx-archive' });
 
-    expect(relevanceMultiplier(query, exact)).toBeGreaterThan(
-      relevanceMultiplier(query, partial),
+    expect(relevanceBonus(query, exact)).toBeGreaterThan(
+      relevanceBonus(query, partial),
     );
   });
 });

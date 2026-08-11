@@ -54,26 +54,29 @@ function identifiers(value: string): string[] {
   );
 }
 
-export function relevanceMultiplier(query: string, result: SearchResult): number {
+export function relevanceBonus(query: string, result: SearchResult): number {
   const queryTerms = terms(query);
-  if (queryTerms.length === 0) return 1;
+  if (queryTerms.length === 0) return 0;
 
   const project = normalize(result.project);
   const title = normalize(result.title);
   const tags = normalize(result.tags.join(' '));
   const text = normalize(result.text);
-  const searchable = `${project} ${title} ${tags} ${text}`;
 
-  const projectMatch = queryTerms.includes(project);
-  const matchedTerms = queryTerms.filter(term => searchable.includes(term));
-  const coverage = matchedTerms.length / queryTerms.length;
+  const projectBonus = queryTerms.includes(project) ? 0.3 : 0;
+  const coverage = queryTerms.reduce((total, term) => {
+    if (title.includes(term) || tags.includes(term)) return total + 1;
+    if (project.includes(term)) return total + 0.75;
+    if (text.includes(term)) return total + 0.25;
+    return total;
+  }, 0) / queryTerms.length;
+  const coverageBonus = Math.min(coverage * 0.4, 0.4);
   const identifierMatches = identifiers(query).filter(identifier =>
-    searchable.includes(identifier),
+    title.includes(identifier)
+    || tags.includes(identifier)
+    || text.includes(identifier),
   ).length;
+  const identifierBonus = Math.min(identifierMatches * 0.05, 0.1);
 
-  const projectBoost = projectMatch ? 1.5 : 1;
-  const coverageBoost = 1 + coverage * 0.75;
-  const identifierBoost = 1 + Math.min(identifierMatches, 3) * 0.25;
-
-  return projectBoost * coverageBoost * identifierBoost;
+  return projectBonus + coverageBonus + identifierBonus;
 }
