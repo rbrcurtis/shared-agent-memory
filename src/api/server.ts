@@ -8,7 +8,12 @@ import { ServerConfig } from "../types.js";
 import { parseApiKeys, buildAuthHook } from "./middleware/auth.js";
 import { memoryRoutes } from "./routes/memories.js";
 import { configRoutes } from "./routes/config.js";
-import type { FastifyInstance } from "fastify";
+import type {
+  FastifyError,
+  FastifyInstance,
+  FastifyRequest,
+  FastifyReply,
+} from "fastify";
 
 export interface AppConfig {
   qdrantUrl: string;
@@ -24,7 +29,10 @@ function log(msg: string): void {
 }
 
 export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
-  const app = Fastify({ logger: false });
+  // Fastify's pino logger emits one line per request with method, path,
+  // status, and duration — the visibility that was missing when 500s happened.
+  // Disabled under vitest (NODE_ENV=test) so test output stays quiet.
+  const app = Fastify({ logger: process.env["NODE_ENV"] === "test" ? false : true });
 
   // Register Swagger (OpenAPI spec)
   await app.register(swagger, {
@@ -63,14 +71,36 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
     if (path === "/health" || path.startsWith("/docs")) {
       return;
     }
-    return authHook(request, reply);
+    await authHook(request, reply);
+    if (reply.statusCode === 401) {
+      request.log.warn(`Auth rejected: ${request.method} ${path} from ${request.ip}`);
+    }
   });
 
-  // Global error handler
+  // Global error handler. Previously errors were returned to the client but
+  // never logged, so outages (e.g. Qdrant unreachable surfacing as
+  // "fetch failed") were invisible in k8s logs. Log 5xx with stack and the
+  // underlying fetch cause; log 4xx with the reason only.
   app.setErrorHandler(
-    (error: { statusCode?: number; message?: string }, _request, reply) => {
+    (error: FastifyError, request: FastifyRequest, reply: FastifyReply) => {
       const code = error.statusCode ?? 500;
       const message = error.message || "Internal server error";
+      if (code >= 500) {
+        const cause =
+          error.cause instanceof Error
+            ? `${error.cause.name}: ${error.cause.message}`
+            : error.cause !== undefined
+              ? String(error.cause)
+              : undefined;
+        request.log.error(
+          { err: error, cause },
+          `${request.method} ${request.url} failed with ${code}: ${message}`,
+        );
+      } else {
+        request.log.warn(
+          `${request.method} ${request.url} rejected with ${code}: ${message}`,
+        );
+      }
       reply.code(code).send({ error: { code, message } });
     },
   );
