@@ -339,6 +339,13 @@ async function main(): Promise<void> {
 
       case "load_memories": {
         const ids = ensureArray<string>(toolArgs.ids) || [];
+        if (ids.length === 0) {
+          // Empty ids would hit the API without the required ids param and
+          // return 400 — fail fast with a helpful message instead.
+          return {
+            content: [{ type: "text", text: "No memory IDs provided to load." }],
+          };
+        }
         const result = await client.loadMemories(ids);
         const results = result.results as SearchResult[];
         return {

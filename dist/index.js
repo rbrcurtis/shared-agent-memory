@@ -5929,6 +5929,11 @@ ${r.title || "(untitled)"}${who ? ` \u2014 ${who}` : ""}`;
       }
       case "load_memories": {
         const ids = ensureArray(toolArgs.ids) || [];
+        if (ids.length === 0) {
+          return {
+            content: [{ type: "text", text: "No memory IDs provided to load." }]
+          };
+        }
         const result = await loadMemories(ids);
         const results = result.results;
         return {

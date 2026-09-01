@@ -55,4 +55,13 @@ describe('relevanceBonus', () => {
       relevanceBonus(query, partial),
     );
   });
+
+  // Regression: memories missing title/text/tags (legacy or partial writes)
+  // crashed the whole search with "Cannot read properties of undefined
+  // (reading 'toLowerCase')" — surfaced as 500 to every client.
+  it('does not crash when title, text, or tags are missing', () => {
+    const query = 'anything';
+    const noTitle = result({ title: undefined, text: undefined, tags: undefined });
+    expect(() => relevanceBonus(query, noTitle)).not.toThrow();
+  });
 });

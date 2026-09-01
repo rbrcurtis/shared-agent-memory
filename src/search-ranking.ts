@@ -58,10 +58,10 @@ export function relevanceBonus(query: string, result: SearchResult): number {
   const queryTerms = terms(query);
   if (queryTerms.length === 0) return 0;
 
-  const project = normalize(result.project);
-  const title = normalize(result.title);
-  const tags = normalize(result.tags.join(' '));
-  const text = normalize(result.text);
+  const project = normalize(result.project ?? '');
+  const title = normalize(result.title ?? '');
+  const tags = normalize((result.tags ?? []).join(' '));
+  const text = normalize(result.text ?? '');
 
   const projectBonus = queryTerms.includes(project) ? 0.3 : 0;
   const coverage = queryTerms.reduce((total, term) => {
