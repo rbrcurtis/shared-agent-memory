@@ -1,8 +1,9 @@
-// Entity extraction using ollama qwen3:8b structured output
+// Entity extraction using a local ollama-compatible model with structured output.
+// OLLAMA_MODEL names it; the default is the name this used before the box moved off ollama.
 // Extracts named entities from memory text for cross-linking via tags
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
-const MODEL = 'qwen3:8b';
+const MODEL = process.env.OLLAMA_MODEL || 'qwen3:8b';
 
 const ENTITY_SCHEMA = {
   type: 'object',
@@ -65,7 +66,7 @@ function dedupeEntities(entities: ExtractedEntity[]): string[] {
 }
 
 /**
- * Extract named entities from text using ollama qwen3:8b.
+ * Extract named entities from text using OLLAMA_MODEL.
  * Returns lowercased entity names suitable for use as tags.
  * Graceful failure: returns [] on any error, never throws.
  */

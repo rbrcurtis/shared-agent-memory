@@ -1,7 +1,7 @@
 import type { CandidateLearning, NormalizedTranscript } from './types.js';
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
-const DEFAULT_MODEL = 'qwen3:8b';
+const DEFAULT_MODEL = process.env.OLLAMA_MODEL || 'qwen3:8b';
 
 const LEARNING_SCHEMA = {
   type: 'object',
