@@ -5484,7 +5484,7 @@ function shouldSkipText(text) {
 
 // src/ingest/extract.ts
 var OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
-var DEFAULT_MODEL = "qwen3:8b";
+var DEFAULT_MODEL = process.env.OLLAMA_MODEL || "qwen3:8b";
 var LEARNING_SCHEMA = {
   type: "object",
   properties: {
